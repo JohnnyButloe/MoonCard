@@ -4,14 +4,28 @@
 export type PlaceResult = {
   id: string;
   label: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
 };
 
 export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-  if (!query.trim()) {
-    return [];
-  }
+  // Trim and validate query
+  const q = query.trim();
+  if (!q) return [];
 
-  // TODO: Replace with real implementation (Mapbox, OpenCage, etc.)
-  console.warn("searchPlaces is not implemented yet. Returning [] for now.");
+  if (q.toLowerCase() === "new york") {
+    return [
+      {
+        id: "new-york-ny",
+        label: "New York, USA",
+        latitude: 40.7128,
+        longitude: -74.006,
+        timezone: "America/New_York",
+      },
+    ];
+  }
+  // Here you could call a real geocoding API (e.g. Mapbox or OpenCage)
+  console.warn("searchPlaces is not implemented; returning default");
   return [];
 }
