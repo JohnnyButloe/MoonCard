@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from datetime import datetime
-from moon_ephem import moon_now, moon_events
+from .moon_ephem import moon_now, moon_events
 
 app = FastAPI()
 

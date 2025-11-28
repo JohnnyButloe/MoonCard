@@ -22,7 +22,7 @@ export default function MoonNowCard({
   const todayQ = useMoonToday(lat, lon, tz);
 
   // Render loading and error states.
-  if (nowQ.isLoading || todayQ.isLoading) {
+  if (nowQ.isSuccess || todayQ.isSuccess) {
     return <div className="p-6 rounded-2xl shadow">Loading…</div>;
   }
   if (nowQ.error || todayQ.error) {
