@@ -22,9 +22,10 @@ export default function MoonNowCard({
   const todayQ = useMoonToday(lat, lon, tz);
 
   // Render loading and error states.
-  if (nowQ.isSuccess || todayQ.isSuccess) {
+  if (nowQ.isLoading || todayQ.isLoading || !nowQ.data || !todayQ.data) {
     return <div className="p-6 rounded-2xl shadow">Loading…</div>;
   }
+
   if (nowQ.error || todayQ.error) {
     return (
       <div className="p-6 rounded-2xl shadow text-red-600">
@@ -33,7 +34,7 @@ export default function MoonNowCard({
     );
   }
 
-  // Safe to access the data now
+  // Safe to access the data now (non-null because of guards above)
   const now = nowQ.data!;
   const today = todayQ.data!;
 
@@ -43,66 +44,98 @@ export default function MoonNowCard({
         <h2 className="text-xl font-semibold">Moon now</h2>
         {/* Display the local timestamp from the now hook */}
         <p className="text-sm opacity-70">{now.whenISO}</p>
+        <span className="font-semibold">internal:</span> python_service ·{" "}
+        <span className="font-semibold">external:</span> SunCalc
       </header>
 
       {/* Current illumination, phase, altitude and azimuth */}
       <section className="grid grid-cols-2 gap-4">
+        {/* Illumination */}
         <div>
-          {/* Illumination: internal % / external % */}
           <div className="text-4xl font-bold">
             {now.internal.illumPct}% / {now.external.illumPct}%
           </div>
           <div className="opacity-70">illumination</div>
+          <div className="mt-1 text-xs opacity-60"></div>
         </div>
+
+        {/* Phase */}
         <div>
-          {/* Phase name: internal name / external name */}
           <div className="text-2xl font-semibold">
             {today.internal.phaseName ?? "—"} /{" "}
             {today.external.phaseName ?? "—"}
           </div>
           <div className="opacity-70">phase</div>
+          <div className="mt-1 text-xs opacity-60"></div>
         </div>
+
+        {/* Altitude */}
         <div>
-          {/* Altitude: internal vs external */}
           <div className="text-2xl font-semibold">
             {now.internal.altDeg.toFixed(1)}° / {now.external.altDeg.toFixed(1)}
             °
           </div>
           <div className="opacity-70">altitude</div>
+          <div className="mt-1 text-xs opacity-60"></div>
         </div>
+
+        {/* Azimuth */}
         <div>
-          {/* Azimuth: internal vs external */}
           <div className="text-2xl font-semibold">
             {now.internal.azDeg.toFixed(0)}° / {now.external.azDeg.toFixed(0)}°
           </div>
           <div className="opacity-70">azimuth</div>
+          <div className="mt-1 text-xs opacity-60"></div>
         </div>
       </section>
 
       {/* Daily events: rise, high, set, low */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        {/* Moonrise */}
         <div>
           <div className="opacity-70">Moonrise</div>
           <div>
             {today.internal.rise ?? "—"} / {today.external.rise ?? "—"}
           </div>
+          <div className="mt-1 text-xs opacity-60">
+            <span className="font-semibold">internal:</span> python_service ·{" "}
+            <span className="font-semibold">external:</span> SunCalc
+          </div>
         </div>
+
+        {/* High moon */}
         <div>
           <div className="opacity-70">High moon</div>
           <div>
             {today.internal.highMoon ?? "—"} / {today.external.highMoon ?? "—"}
           </div>
+          <div className="mt-1 text-xs opacity-60">
+            <span className="font-semibold">internal:</span> python_service ·{" "}
+            <span className="font-semibold">external:</span> SunCalc
+          </div>
         </div>
+
+        {/* Moonset */}
         <div>
           <div className="opacity-70">Moonset</div>
           <div>
             {today.internal.set ?? "—"} / {today.external.set ?? "—"}
           </div>
+          <div className="mt-1 text-xs opacity-60">
+            <span className="font-semibold">internal:</span> python_service ·{" "}
+            <span className="font-semibold">external:</span> SunCalc
+          </div>
         </div>
+
+        {/* Low moon */}
         <div>
           <div className="opacity-70">Low moon</div>
           <div>
             {today.internal.lowMoon ?? "—"} / {today.external.lowMoon ?? "—"}
+          </div>
+          <div className="mt-1 text-xs opacity-60">
+            <span className="font-semibold">internal:</span> python_service ·{" "}
+            <span className="font-semibold">external:</span> SunCalc
           </div>
         </div>
       </section>
