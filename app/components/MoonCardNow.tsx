@@ -1,6 +1,35 @@
 "use client";
 import { useLunarNow, useMoonToday } from "../hooks/useLunar";
 
+function formatLocalTime(iso: string | undefined, tz: string): string {
+  if (!iso) return "—";
+
+  const d = new Date(iso);
+
+  // Example output: "9:09 AM EST" / "9:09 AM PDT"
+  // MDN: Intl.DateTimeFormat with timeStyle + timeZoneName formats nice local times. :contentReference[oaicite:3]{index=3}
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+    timeZoneName: "short", // EST / EDT, etc.
+  }).format(d);
+}
+
+function formatLocalDateTime(iso: string | undefined, tz: string): string {
+  if (!iso) return "—";
+
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+    timeZoneName: "short",
+  }).format(d);
+}
+
 /**
  * MoonNowCard displays current lunar information and today's lunar events.
  * It now supports comparison between the internal Python ephemeris service
@@ -43,7 +72,9 @@ export default function MoonNowCard({
       <header>
         <h2 className="text-xl font-semibold">Moon now</h2>
         {/* Display the local timestamp from the now hook */}
-        <p className="text-sm opacity-70">{now.whenISO}</p>
+        <p className="text-sm opacity-70">
+          {formatLocalDateTime(now.whenISO, tz)}
+        </p>
         <span className="font-semibold">internal:</span> python_service ·{" "}
         <span className="font-semibold">external:</span> SunCalc
       </header>
@@ -95,7 +126,8 @@ export default function MoonNowCard({
         <div>
           <div className="opacity-70">Moonrise</div>
           <div>
-            {today.internal.rise ?? "—"} / {today.external.rise ?? "—"}
+            {formatLocalDateTime(today.internal.rise, tz)} /{" "}
+            {formatLocalDateTime(today.external.rise, tz)}
           </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
@@ -107,7 +139,8 @@ export default function MoonNowCard({
         <div>
           <div className="opacity-70">High moon</div>
           <div>
-            {today.internal.highMoon ?? "—"} / {today.external.highMoon ?? "—"}
+            {formatLocalDateTime(today.internal.highMoon, tz)} /{" "}
+            {formatLocalDateTime(today.external.highMoon, tz)}
           </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
@@ -119,7 +152,8 @@ export default function MoonNowCard({
         <div>
           <div className="opacity-70">Moonset</div>
           <div>
-            {today.internal.set ?? "—"} / {today.external.set ?? "—"}
+            {formatLocalDateTime(today.internal.set, tz)} /{" "}
+            {formatLocalDateTime(today.external.set, tz)}
           </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
@@ -131,7 +165,8 @@ export default function MoonNowCard({
         <div>
           <div className="opacity-70">Low moon</div>
           <div>
-            {today.internal.lowMoon ?? "—"} / {today.external.lowMoon ?? "—"}
+            {formatLocalDateTime(today.internal.lowMoon, tz)} /{" "}
+            {formatLocalDateTime(today.external.lowMoon, tz)}
           </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}

@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:api": "uvicorn app.python_service.main:app --reload",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:api\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
