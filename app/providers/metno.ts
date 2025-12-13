@@ -51,9 +51,33 @@ export async function fetchMoonToday(params: {
   // Sunrise 3.0 Moon Properties:
   // properties.moonrise.time, .moonset.timem .high_moon.time, .low_moon.time
   const p = json?.properties ?? json?.features?.[0]?.properties;
+
+  // Convert raw MET times to ISO in the user's timezone
+  const riseISO = toISOInTZ(p?.moonrise?.time, params.tz);
+  const setISO = toISOInTZ(p?.moonset?.time, params.tz);
+
+  let adjustedSetISO = setISO;
+
+  if (riseISO && setISO) {
+    const riseDate = new Date(riseISO);
+    const setDate = new Date(setISO);
+
+    // If the reported moonset happens earlier in the day than moonrise,
+    // it actually belongs to the *next* calendar day (same "night").
+    if (setDate <= riseDate) {
+      setDate.setDate(setDate.getDate() + 1);
+
+      adjustedSetISO = formatInTimeZone(
+        setDate,
+        params.tz,
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+      );
+    }
+  }
+
   return {
-    rise: toISOInTZ(p?.moonrise?.time, params.tz),
-    set: toISOInTZ(p?.moonset?.time, params.tz),
+    rise: riseISO,
+    set: adjustedSetISO,
     highMoon: toISOInTZ(p?.high_moon?.time, params.tz),
     lowMoon: toISOInTZ(p?.low_moon?.time, params.tz),
     phaseDeg: p?.moon_phase?.value,

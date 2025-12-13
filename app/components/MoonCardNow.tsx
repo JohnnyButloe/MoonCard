@@ -1,5 +1,6 @@
 "use client";
 import { useLunarNow, useMoonToday } from "../hooks/useLunar";
+import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
@@ -67,6 +68,10 @@ export default function MoonNowCard({
   const now = nowQ.data!;
   const today = todayQ.data!;
 
+  // Use internal illumination as primary source for phase visual,
+  // falling back to the external value if needed.
+  const phaseIllumPct = now.internal.illumPct ?? now.external.illumPct;
+
   return (
     <div className="grid gap-4 p-6 rounded-2xl shadow bg-white/5 backdrop-blur">
       <header>
@@ -81,7 +86,7 @@ export default function MoonNowCard({
 
       {/* Current illumination, phase, altitude and azimuth */}
       <section className="grid grid-cols-2 gap-4">
-        {/* Illumination */}
+        {/* Phase */}
         <div>
           <div className="text-4xl font-bold">
             {now.internal.illumPct}% / {now.external.illumPct}%
@@ -89,17 +94,15 @@ export default function MoonNowCard({
           <div className="opacity-70">illumination</div>
           <div className="mt-1 text-xs opacity-60"></div>
         </div>
-
-        {/* Phase */}
         <div>
-          <div className="text-2xl font-semibold">
-            {today.internal.phaseName ?? "—"} /{" "}
-            {today.external.phaseName ?? "—"}
+          <div className="flex items-center gap-4">
+            <div className="text-2xl font-semifold">
+              {today.internal.phaseName ?? "-"}
+            </div>
+            <MoonPhaseCircle illuminationPct={phaseIllumPct} />
           </div>
           <div className="opacity-70">phase</div>
-          <div className="mt-1 text-xs opacity-60"></div>
         </div>
-
         {/* Altitude */}
         <div>
           <div className="text-2xl font-semibold">
