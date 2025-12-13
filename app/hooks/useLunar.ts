@@ -48,6 +48,9 @@ export type LunarTodayResult = {
     highMoon?: string;
     lowMoon?: string;
     phaseName?: string;
+
+    prevRise?: string;
+    prevSet?: string;
   };
   external: {
     rise?: string;
@@ -55,8 +58,24 @@ export type LunarTodayResult = {
     highMoon?: string;
     lowMoon?: string;
     phaseName?: string;
+    prevRise?: string;
+    prevSet?: string;
   };
 };
+
+function shiftLocalDate(base: Date, tz: string, deltaDays: number): string {
+  // Use noon so DST transitions at ~2AM don’t cause off-by-one local dates.
+  const baseNoon = formatInTimeZone(base, tz, "yyyy-MM-dd'T'12:00:00XXX");
+  const d = new Date(baseNoon);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return formatInTimeZone(d, tz, "yyyy-MM-dd");
+}
+
+function isPast(iso: string | undefined, now: Date): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) && t <= now.getTime();
+}
 
 /**
  * useLunarNow performs a live comparison between the internal Python
@@ -107,35 +126,73 @@ export function useLunarNow(lat: number, lon: number, tz: string) {
  * the external MET Norway API. It returns an object containing both
  * sets of results. The query is considered fresh for thirty minutes.
  */
+
 export function useMoonToday(lat: number, lon: number, tz: string) {
-  return useQuery<LunarTodayResult>({
+  return useQuery({
     queryKey: ["moon-today-compare", lat, lon, tz],
     queryFn: async () => {
-      // Compute the local date string in the user's timezone (YYYY-MM-DD)
-      const todayLocal = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
-      // Internal daily events
-      const pyEvt = await fetchMoonEvents(lat, lon, todayLocal);
-      // External daily events from MET API
-      const extEvt = await fetchMoonToday({ lat, lon, tz, date: todayLocal });
+      const now = new Date();
+
+      const todayLocal = formatInTimeZone(now, tz, "yyyy-MM-dd");
+      const yesterdayLocal = shiftLocalDate(now, tz, -1);
+      const tomorrowLocal = shiftLocalDate(now, tz, +1);
+
+      // Always fetch "today" first (we use its moonset to decide rollover)
+      const [pyToday, extToday] = await Promise.all([
+        fetchMoonEvents(lat, lon, todayLocal),
+        fetchMoonToday({ lat, lon, tz, date: todayLocal }),
+      ]);
+
+      // Prefer external for rollover decision since todayLocal is based on tz
+      const setForSwitch = extToday.set ?? pyToday.set;
+      const moonsetPassed = isPast(setForSwitch, now);
+
+      const activeDate = moonsetPassed ? tomorrowLocal : todayLocal;
+      const previousDate = moonsetPassed ? todayLocal : yesterdayLocal;
+
+      const [pyActive, pyPrev, extActive, extPrev] = await Promise.all([
+        activeDate === todayLocal
+          ? Promise.resolve(pyToday)
+          : fetchMoonEvents(lat, lon, activeDate),
+        previousDate === todayLocal
+          ? Promise.resolve(pyToday)
+          : fetchMoonEvents(lat, lon, previousDate),
+
+        activeDate === todayLocal
+          ? Promise.resolve(extToday)
+          : fetchMoonToday({ lat, lon, tz, date: activeDate }),
+        previousDate === todayLocal
+          ? Promise.resolve(extToday)
+          : fetchMoonToday({ lat, lon, tz, date: previousDate }),
+      ]);
 
       return {
         internal: {
-          rise: pyEvt.rise,
-          set: pyEvt.set,
-          highMoon: pyEvt.high_moon ?? (pyEvt as any).highMoon,
-          lowMoon: pyEvt.low_moon ?? (pyEvt as any).lowMoon,
-          phaseName: pyEvt.phase_name ?? (pyEvt as any).phaseName,
+          // MAIN (rolls over after moonset)
+          rise: pyActive.rise,
+          set: pyActive.set,
+          highMoon: pyActive.high_moon ?? (pyActive as any).highMoon,
+          lowMoon: pyActive.low_moon ?? (pyActive as any).lowMoon,
+          phaseName: pyActive.phase_name ?? (pyActive as any).phaseName,
+
+          // PREVIOUS cycle (yesterday, until moonset passes; then today)
+          prevRise: pyPrev.rise,
+          prevSet: pyPrev.set,
         },
         external: {
-          rise: extEvt.rise,
-          set: extEvt.set,
-          highMoon: (extEvt as any).highMoon,
-          lowMoon: (extEvt as any).lowMoon,
-          phaseName: phaseNameFromDeg((extEvt as any).phaseDeg),
+          // MAIN (same rollover)
+          rise: extActive.rise,
+          set: extActive.set,
+          highMoon: (extActive as any).highMoon,
+          lowMoon: (extActive as any).lowMoon,
+          phaseName: phaseNameFromDeg((extActive as any).phaseDeg),
+
+          // PREVIOUS cycle
+          prevRise: extPrev.rise,
+          prevSet: extPrev.set,
         },
       };
     },
-    // Keep results for 30 minutes
     staleTime: 60_000 * 30,
   });
 }

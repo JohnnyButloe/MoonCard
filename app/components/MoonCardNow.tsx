@@ -97,7 +97,7 @@ export default function MoonNowCard({
         <div>
           <div className="flex items-center gap-4">
             <div className="text-2xl font-semifold">
-              {today.internal.phaseName ?? "-"}
+              {today.internal.phaseName ?? today.external.phaseName ?? "-"}
             </div>
             <MoonPhaseCircle illuminationPct={phaseIllumPct} />
           </div>
@@ -132,6 +132,11 @@ export default function MoonNowCard({
             {formatLocalDateTime(today.internal.rise, tz)} /{" "}
             {formatLocalDateTime(today.external.rise, tz)}
           </div>
+          <div className="text-xs opacity-70 mt-1">
+            Previous moonrise:{" "}
+            {formatLocalDateTime(today.internal.prevRise, tz)} /{" "}
+            {formatLocalDateTime(today.external.prevRise, tz)}
+          </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
@@ -157,6 +162,10 @@ export default function MoonNowCard({
           <div>
             {formatLocalDateTime(today.internal.set, tz)} /{" "}
             {formatLocalDateTime(today.external.set, tz)}
+          </div>
+          <div className="text-xs opacity-70 mt-1">
+            Previous moonset: {formatLocalDateTime(today.internal.prevSet, tz)}{" "}
+            / {formatLocalDateTime(today.external.prevSet, tz)}
           </div>
           <div className="mt-1 text-xs opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}

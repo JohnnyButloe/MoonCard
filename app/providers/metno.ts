@@ -80,6 +80,6 @@ export async function fetchMoonToday(params: {
     set: adjustedSetISO,
     highMoon: toISOInTZ(p?.high_moon?.time, params.tz),
     lowMoon: toISOInTZ(p?.low_moon?.time, params.tz),
-    phaseDeg: p?.moon_phase?.value,
+    phaseDeg: p?.moonphase ?? p?.moon_phase?.value,
   };
 }
