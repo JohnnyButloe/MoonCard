@@ -11,3 +11,5 @@ export async function getBrowserLocation(timeoutMs = 8000): Promise<LatLon> {
     );
   });
 }
+
+// Currently not used
