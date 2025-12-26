@@ -7,6 +7,7 @@ import LocationTag from "./components/LocationTag";
 
 import { DEFAULT_PLACE } from "./lib/places";
 import { getBrowserLocation, formatGeoError } from "./lib/location";
+import { reverseGeocode } from "./lib/reverseGeocode";
 
 type LocationSource = "geolocation" | "cache" | "fallback";
 
@@ -108,17 +109,42 @@ export default function Page() {
       });
 
       if (res.ok) {
+        const latitude = res.location.latitude;
+        const longitude = res.location.longitude;
+
         const next: CachedLocation = {
           label: "Current location",
-          latitude: res.location.latitude,
-          longitude: res.location.longitude,
+          latitude,
+          longitude,
           tz: browserTz,
           source: "geolocation",
         };
 
+        // Update immediately (don't block UI on reverse geocode)
         setLoc(next);
         setTz(browserTz);
         writeCachedLocation(next);
+
+        // Reverse geocode: lat/lon -> "City, State, Country"
+        const rg = await reverseGeocode(latitude, longitude, {
+          localityLanguage: "en",
+          timeoutMs: 4000,
+        });
+
+        if (rg?.label) {
+          setLoc((prev) => {
+            // Don't overwrite if location changed since the request started
+            if (prev.latitude !== latitude || prev.longitude !== longitude)
+              return prev;
+
+            const updated: CachedLocation = {
+              ...prev,
+              label: rg.label,
+            };
+            writeCachedLocation(updated);
+            return updated;
+          });
+        }
       } else {
         console.warn(formatGeoError(res.error));
         // Do nothing: we already rendered cache/fallback immediately
