@@ -127,7 +127,7 @@ export default function MoonNowCard({
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         {/* Moonrise */}
         <div>
-          <div className="opacity-70">Moonrise</div>
+          <div className="opacity-70">Moonrise (East)</div>
           <div>
             {formatLocalDateTime(today.internal.rise, tz)} /{" "}
             {formatLocalDateTime(today.external.rise, tz)}
@@ -158,7 +158,7 @@ export default function MoonNowCard({
 
         {/* Moonset */}
         <div>
-          <div className="opacity-70">Moonset</div>
+          <div className="opacity-70">Moonset (West)</div>
           <div>
             {formatLocalDateTime(today.internal.set, tz)} /{" "}
             {formatLocalDateTime(today.external.set, tz)}
