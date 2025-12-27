@@ -5,6 +5,7 @@ export type BigDataCloudReverseGeocodeResponse = {
   locality?: string; // sometimes used instead of city
   principalSubdivision?: string; // e.g., state / region
   countryName?: string;
+  countryCode?: string;
   postcode?: string;
   lookupSource?: "reverseGeocoding" | "ipGeolocation" | string;
 };
@@ -17,10 +18,37 @@ export type ReverseGeocodeResult = {
   raw: BigDataCloudReverseGeocodeResponse;
 };
 
+const COUNTRY_CODE_ABBREV: Record<string, string> = {
+  US: "USA",
+};
+function normalizeCountry(
+  countryName?: string,
+  countryCode?: string
+): string | undefined {
+  const code = countryCode?.toUpperCase();
+  if (code && COUNTRY_CODE_ABBREV[code]) return COUNTRY_CODE_ABBREV[code];
+
+  if (!countryName) return undefined;
+
+  // Some upstream datasets include the definite article as "(the)"
+  // e.g. "United States of America (the)", "Netherlands (the)"
+  const cleaned = countryName.replace(/\s*\(the\)\s*$/i, "").trim();
+
+  // Extra safety for US even if code is missing
+  if (
+    /^united states of america$/i.test(cleaned) ||
+    /^united states$/i.test(cleaned)
+  ) {
+    return "USA";
+  }
+
+  return cleaned;
+}
+
 function buildLabel(raw: BigDataCloudReverseGeocodeResponse): string | null {
   const city = raw.city || raw.locality;
   const region = raw.principalSubdivision;
-  const country = raw.countryName;
+  const country = normalizeCountry(raw.countryName, raw.countryCode);
 
   const parts = [city, region, country].filter(Boolean);
   if (parts.length === 0) return null;
@@ -62,11 +90,14 @@ export async function reverseGeocode(
     const label = buildLabel(raw);
     if (!label) return null;
 
+    const country = normalizeCountry(raw.countryName, raw.countryCode);
+
     return {
       label,
       city: raw.city ?? raw.locality,
       region: raw.principalSubdivision,
       country: raw.countryName,
+      country,
       raw,
     };
   } catch {
