@@ -9,6 +9,8 @@ import { DEFAULT_PLACE } from "./lib/places";
 import { getBrowserLocation, formatGeoError } from "./lib/location";
 import { reverseGeocode } from "./lib/reverseGeocode";
 
+import MoonAltitudeGraph from "./components/MoonGraph";
+
 type LocationSource = "geolocation" | "cache" | "fallback";
 
 type CachedLocation = {
@@ -166,6 +168,8 @@ export default function Page() {
 
       {/* Preserve existing MoonNowCard behavior */}
       <MoonNowCard lat={loc.latitude} lon={loc.longitude} tz={tz} />
+      {/* Moon altitude graph */}
+      <MoonAltitudeGraph lat={loc.latitude} lon={loc.longitude} tz={tz} />
     </main>
   );
 }
