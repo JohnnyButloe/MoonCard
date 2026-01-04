@@ -105,19 +105,39 @@ export function useLunarNow(lat: number, lon: number, tz: string) {
           altDeg: py.alt_deg,
           azDeg: py.az_deg,
           illumPct: Math.round(py.illum_frac * 100),
-          phaseName: undefined,
+          phaseName: py.phase_name,
         },
         external: {
           altDeg: sc.altDeg,
           azDeg: sc.azDeg,
           illumPct: Math.round(sc.frac * 100),
-          phaseName: undefined,
+          phaseName: py.phase_name,
         },
       };
     },
     // Refetch once per minute
     refetchInterval: 60_000,
   });
+}
+
+function approximateHighMoon(
+  rise: string | undefined,
+  set: string | undefined,
+  tz: string
+): string | undefined {
+  if (!rise || !set) return undefined;
+  const riseDate = new Date(rise);
+  const setDate = new Date(set);
+  if (
+    !Number.isFinite(riseDate.getTime()) ||
+    !Number.isFinite(setDate.getTime())
+  )
+    return undefined;
+  // Midpoint timestamp between rise and set
+  const midMillis =
+    riseDate.getTime() + (setDate.getTime() - riseDate.getTime()) / 2;
+  const midDate = new Date(midMillis);
+  return formatInTimeZone(midDate, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
 /**
@@ -166,28 +186,38 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
           : fetchMoonToday({ lat, lon, tz, date: previousDate }),
       ]);
 
+      const fallbackInternalHigh = approximateHighMoon(
+        pyActive.rise,
+        pyActive.set,
+        tz
+      );
+      const fallbackExternalHigh = approximateHighMoon(
+        extActive.rise,
+        extActive.set,
+        tz
+      );
+
       return {
         internal: {
-          // MAIN (rolls over after moonset)
           rise: pyActive.rise,
           set: pyActive.set,
-          highMoon: pyActive.high_moon ?? (pyActive as any).highMoon,
+          // prefer the value from the Python service, but use the fallback if undefined
+          highMoon:
+            pyActive.high_moon ??
+            (pyActive as any).highMoon ??
+            fallbackInternalHigh,
           lowMoon: pyActive.low_moon ?? (pyActive as any).lowMoon,
           phaseName: pyActive.phase_name ?? (pyActive as any).phaseName,
-
-          // PREVIOUS cycle (yesterday, until moonset passes; then today)
           prevRise: pyPrev.rise,
           prevSet: pyPrev.set,
         },
         external: {
-          // MAIN (same rollover)
           rise: extActive.rise,
           set: extActive.set,
-          highMoon: (extActive as any).highMoon,
+          // prefer the value from MET, but use the fallback if undefined
+          highMoon: (extActive as any).highMoon ?? fallbackExternalHigh,
           lowMoon: (extActive as any).lowMoon,
           phaseName: phaseNameFromDeg((extActive as any).phaseDeg),
-
-          // PREVIOUS cycle
           prevRise: extPrev.rise,
           prevSet: extPrev.set,
         },

@@ -7,6 +7,9 @@ export type MoonNow = {
   distance_km: number;
   ra_hours: number;
   dec_deg: number;
+
+  phase_name?: string; // NEW
+  phase_deg?: number; // optional
 };
 
 export type MoonEvents = {
