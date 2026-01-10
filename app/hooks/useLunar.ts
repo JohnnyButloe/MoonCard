@@ -186,6 +186,75 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
           : fetchMoonToday({ lat, lon, tz, date: previousDate }),
       ]);
 
+      // If activeDate is today, the “next” date is tomorrow.
+      // If activeDate is tomorrow, the “next” date is the day after tomorrow.
+      const dayAfterTomorrowLocal = shiftLocalDate(now, tz, +2);
+      const nextLocal =
+        activeDate === todayLocal ? tomorrowLocal : dayAfterTomorrowLocal;
+
+      // Lazy fetch next-day events only if we actually need them.
+      let pyNextCache: Awaited<ReturnType<typeof fetchMoonEvents>> | undefined;
+      const getPyNext = async () => {
+        if (!pyNextCache)
+          pyNextCache = await fetchMoonEvents(lat, lon, nextLocal);
+        return pyNextCache;
+      };
+
+      let extNextCache: Awaited<ReturnType<typeof fetchMoonToday>> | undefined;
+      const getExtNext = async () => {
+        if (!extNextCache)
+          extNextCache = await fetchMoonToday({
+            lat,
+            lon,
+            tz,
+            date: nextLocal,
+          });
+        return extNextCache;
+      };
+
+      // Start with "active" day values
+      let internalRise = pyActive.rise;
+      let internalSet = pyActive.set;
+      let externalRise = extActive.rise;
+      let externalSet = extActive.set;
+
+      // Internal rise fallback (missing OR already in the past => use nextLocal)
+      if (!internalRise || isPast(internalRise, now)) {
+        try {
+          const pyNext = await getPyNext();
+          if (pyNext.rise) internalRise = pyNext.rise;
+        } catch {
+          // ignore; keep original
+        }
+      }
+      // Internal set fallback (missing OR already in the past => use nextLocal)
+      if (!internalSet || isPast(internalSet, now)) {
+        try {
+          const pyNext = await getPyNext();
+          if (pyNext.set) internalSet = pyNext.set;
+        } catch {
+          // ignore; keep original
+        }
+      }
+
+      // External fallbacks (usually not needed, but keeps UI stable)
+      if (!externalRise || isPast(externalRise, now)) {
+        try {
+          const extNext = await getExtNext();
+          if (extNext.rise) externalRise = extNext.rise;
+        } catch {
+          // ignore
+        }
+      }
+      if (!externalSet || isPast(externalSet, now)) {
+        try {
+          const extNext = await getExtNext();
+          if (extNext.set) externalSet = extNext.set;
+        } catch {
+          // ignore
+        }
+      }
+
       const fallbackInternalHigh = approximateHighMoon(
         pyActive.rise,
         pyActive.set,
@@ -199,8 +268,8 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
 
       return {
         internal: {
-          rise: pyActive.rise,
-          set: pyActive.set,
+          rise: internalRise,
+          set: internalSet,
           // prefer the value from the Python service, but use the fallback if undefined
           highMoon:
             pyActive.high_moon ??
@@ -212,8 +281,8 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
           prevSet: pyPrev.set,
         },
         external: {
-          rise: extActive.rise,
-          set: extActive.set,
+          rise: externalRise,
+          set: externalSet,
           // prefer the value from MET, but use the fallback if undefined
           highMoon: (extActive as any).highMoon ?? fallbackExternalHigh,
           lowMoon: (extActive as any).lowMoon,
