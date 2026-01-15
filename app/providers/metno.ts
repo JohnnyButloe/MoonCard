@@ -1,5 +1,8 @@
 import { formatInTimeZone } from "date-fns-tz";
 
+// NOTE: This provider adapts MET Norway Sunrise 3.0 (Moon) responses into our normalized shape.
+// It is intentionally kept separate from the internal Python ephemeris provider (pyMoon).
+
 export type MoonToday = {
   rise?: string;
   set?: string;
@@ -8,18 +11,9 @@ export type MoonToday = {
   phaseDeg?: number;
 };
 
-export function phaseNameFromDeg(deg: number | undefined): string | undefined {
-  if (deg == null) return;
-  if (deg === 0) return "New Moon";
-  if (deg > 0 && deg < 90) return "Waxing Crescent";
-  if (deg === 90) return "First Quarter";
-  if (deg > 90 && deg < 180) return "Waxing Gibbous";
-  if (deg === 180) return "Full Moon";
-  if (deg > 180 && deg < 270) return "Waning Gibbous";
-  if (deg === 270) return "Last Quarter";
-  if (deg > 270 && deg < 360) return "Waning Crescent";
-  return undefined;
-}
+// Re-export the shared phase helper so existing imports (e.g. from useLunar.ts)
+// can continue to import from "../providers/metno" without change.
+export { phaseNameFromDeg } from "../lib/lunarPhase";
 
 function toISOInTZ(raw: string | undefined, tz: string): string | undefined {
   if (!raw) return;
@@ -39,7 +33,8 @@ export async function fetchMoonToday(params: {
   url.searchParams.set("lon", String(params.lon));
   url.searchParams.set("date", params.date);
 
-  // Convert IANA tz to "±HH:MM" offset for MET
+  // Convert IANA tz to "±HH:MM" offset for MET.
+  // Sunrise 3.0 uses an `offset` parameter to return timestamps in local time.
   const now = new Date();
   const offset = formatInTimeZone(now, params.tz, "xxx");
   url.searchParams.set("offset", offset);
@@ -49,13 +44,41 @@ export async function fetchMoonToday(params: {
   const json = await res.json();
 
   // Sunrise 3.0 Moon Properties:
-  // properties.moonrise.time, .moonset.timem .high_moon.time, .low_moon.time
+  // properties.moonrise.time, moonset.time, high_moon.time, low_moon.time
   const p = json?.properties ?? json?.features?.[0]?.properties;
+
+  // Convert raw MET times to ISO in the user's timezone
+  const riseISO = toISOInTZ(p?.moonrise?.time, params.tz);
+  const setISO = toISOInTZ(p?.moonset?.time, params.tz);
+
+  let adjustedSetISO = setISO;
+
+  if (riseISO && setISO) {
+    const riseDate = new Date(riseISO);
+    const setDate = new Date(setISO);
+
+    // If the reported moonset happens earlier in the day than moonrise,
+    // it actually belongs to the *next* calendar day (same "night").
+    if (setDate <= riseDate) {
+      setDate.setDate(setDate.getDate() + 1);
+
+      adjustedSetISO = formatInTimeZone(
+        setDate,
+        params.tz,
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+      );
+    }
+  }
+
+  // MET commonly returns { moonphase: { value: number } } in many clients/examples,
+  // but some intermediates may flatten it to moonphase: number. Support both.
+  const phaseDeg = p?.moonphase?.value ?? p?.moonphase ?? p?.moon_phase?.value;
+
   return {
-    rise: toISOInTZ(p?.moonrise?.time, params.tz),
-    set: toISOInTZ(p?.moonset?.time, params.tz),
+    rise: riseISO,
+    set: adjustedSetISO,
     highMoon: toISOInTZ(p?.high_moon?.time, params.tz),
     lowMoon: toISOInTZ(p?.low_moon?.time, params.tz),
-    phaseDeg: p?.moon_phase?.value,
+    phaseDeg,
   };
 }

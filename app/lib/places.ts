@@ -1,17 +1,28 @@
-// Placeholder place search for MoonCard.
-// Replace with a real API integration later.
+// app/lib/places.ts
 "use client";
+
 export type PlaceResult = {
   id: string;
   label: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+};
+
+export const DEFAULT_PLACE: PlaceResult = {
+  id: "new-york-ny",
+  label: "New York, USA",
+  latitude: 40.7128,
+  longitude: -74.006,
+  timezone: "America/New_York",
 };
 
 export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-  if (!query.trim()) {
-    return [];
-  }
+  const q = query.trim();
+  if (!q) return [];
 
-  // TODO: Replace with real implementation (Mapbox, OpenCage, etc.)
-  console.warn("searchPlaces is not implemented yet. Returning [] for now.");
+  if (q.toLowerCase() === "new york") return [DEFAULT_PLACE];
+
+  console.warn("searchPlaces is not implemented; returning default []");
   return [];
 }
