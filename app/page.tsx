@@ -10,6 +10,7 @@ import { getBrowserLocation, formatGeoError } from "./lib/location";
 import { reverseGeocode } from "./lib/reverseGeocode";
 
 import MoonAltitudeGraph from "./components/MoonGraph";
+import TwilightPhaseBar from "./components/TwilightPhaseBar";
 
 type LocationSource = "geolocation" | "cache" | "fallback";
 
@@ -53,106 +54,89 @@ function writeCachedLocation(loc: CachedLocation) {
 }
 
 export default function Page() {
-  // Guard against StrictMode double-running effects in dev
   const didInit = useRef(false);
 
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Stable fallback rendered on BOTH server and first client render
+  const FALLBACK_LOC: CachedLocation = {
+    label: DEFAULT_PLACE.label ?? "Default location",
+    latitude: DEFAULT_PLACE.latitude,
+    longitude: DEFAULT_PLACE.longitude,
+    tz: DEFAULT_PLACE.timezone ?? "UTC",
+    source: "fallback",
+  };
 
-  // Set an immediate location (cache -> fallback) so UI never blocks on geolocation
-  const [loc, setLoc] = useState<CachedLocation>(() => {
-    // SSR-safe: if window isn't available, use fallback
-    if (typeof window === "undefined") {
-      return {
-        label: DEFAULT_PLACE.label ?? "Default location",
-        latitude: DEFAULT_PLACE.latitude,
-        longitude: DEFAULT_PLACE.longitude,
-        tz: DEFAULT_PLACE.timezone ?? browserTz,
-        source: "fallback",
-      };
-    }
-
-    const cached = readCachedLocation();
-    if (cached) {
-      return {
-        ...cached,
-        source: "cache",
-        // if cached tz is missing, keep browser tz
-        tz: cached.tz ?? browserTz,
-      };
-    }
-
-    return {
-      label: DEFAULT_PLACE.label ?? "Default location",
-      latitude: DEFAULT_PLACE.latitude,
-      longitude: DEFAULT_PLACE.longitude,
-      tz: DEFAULT_PLACE.timezone ?? browserTz,
-      source: "fallback",
-    };
-  });
-
-  // Keep tz as its own state so existing MoonNowCard logic stays the same
-  const [tz, setTz] = useState<string>(() => loc.tz ?? browserTz);
-
-  useEffect(() => {
-    // Ensure tz stays in sync if loc changes (e.g. cache->geolocation)
-    if (loc.tz && loc.tz !== tz) setTz(loc.tz);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc.tz]);
+  // IMPORTANT: do NOT read localStorage/geolocation during initial render
+  const [loc, setLoc] = useState<CachedLocation>(FALLBACK_LOC);
+  const [tz, setTz] = useState<string>(FALLBACK_LOC.tz ?? "UTC");
 
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
 
     (async () => {
+      // 1) Resolve browser timezone AFTER mount (client only)
+      const tzClient =
+        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+        (FALLBACK_LOC.tz ?? "UTC");
+
+      // 2) Load cached location AFTER mount (client only)
+      const cached = readCachedLocation();
+      if (cached) {
+        const cachedLoc: CachedLocation = {
+          ...cached,
+          source: "cache",
+          tz: cached.tz ?? tzClient,
+        };
+        setLoc(cachedLoc);
+        setTz(cachedLoc.tz ?? tzClient);
+      } else {
+        setTz(FALLBACK_LOC.tz ?? tzClient);
+      }
+
+      // 3) Try geolocation (non-blocking UI)
       const res = await getBrowserLocation({
         enableHighAccuracy: true,
         timeout: 6000,
         maximumAge: 60_000,
       });
 
-      if (res.ok) {
-        const latitude = res.location.latitude;
-        const longitude = res.location.longitude;
-
-        const next: CachedLocation = {
-          label: "Current location",
-          latitude,
-          longitude,
-          tz: browserTz,
-          source: "geolocation",
-        };
-
-        // Update immediately (don't block UI on reverse geocode)
-        setLoc(next);
-        setTz(browserTz);
-        writeCachedLocation(next);
-
-        // Reverse geocode: lat/lon -> "City, State, Country"
-        const rg = await reverseGeocode(latitude, longitude, {
-          localityLanguage: "en",
-          timeoutMs: 4000,
-        });
-
-        if (rg?.label) {
-          setLoc((prev) => {
-            // Don't overwrite if location changed since the request started
-            if (prev.latitude !== latitude || prev.longitude !== longitude)
-              return prev;
-
-            const updated: CachedLocation = {
-              ...prev,
-              label: rg.label,
-            };
-            writeCachedLocation(updated);
-            return updated;
-          });
-        }
-      } else {
+      if (!res.ok) {
         console.warn(formatGeoError(res.error));
-        // Do nothing: we already rendered cache/fallback immediately
+        return; // keep cache/fallback
+      }
+
+      const { latitude, longitude } = res.location;
+
+      const next: CachedLocation = {
+        label: "Current location",
+        latitude,
+        longitude,
+        tz: tzClient,
+        source: "geolocation",
+      };
+
+      setLoc(next);
+      setTz(tzClient);
+      writeCachedLocation(next);
+
+      // 4) Reverse geocode label
+      const rg = await reverseGeocode(latitude, longitude, {
+        localityLanguage: "en",
+        timeoutMs: 4000,
+      });
+
+      if (rg?.label) {
+        setLoc((prev) => {
+          if (prev.latitude !== latitude || prev.longitude !== longitude)
+            return prev;
+
+          const updated: CachedLocation = { ...prev, label: rg.label };
+          writeCachedLocation(updated);
+          return updated;
+        });
       }
     })();
-  }, [browserTz]);
+  }, []);
 
   return (
     <main className="relative mx-auto max-w-3xl p-6">
@@ -166,9 +150,8 @@ export default function Page() {
         />
       </div>
 
-      {/* Preserve existing MoonNowCard behavior */}
       <MoonNowCard lat={loc.latitude} lon={loc.longitude} tz={tz} />
-      {/* Moon altitude graph */}
+      <TwilightPhaseBar lat={loc.latitude} lon={loc.longitude} tz={tz} />
       <MoonAltitudeGraph lat={loc.latitude} lon={loc.longitude} tz={tz} />
     </main>
   );

@@ -8,6 +8,9 @@ from app.python_service.moon_ephem import moon_now
 # Use the new local-day events implementation.
 from app.python_service.moon import moon_events_for_date, MoonEvents
 
+from app.python_service.twilight import twilight_for_date
+
+
 
 app = FastAPI()
 
@@ -73,3 +76,32 @@ def api_moon_events(
         "low_moon": _to_iso(events.low_moon),
         "phase_name": events.phase_name,
     }
+
+@app.get("/twilight/events")
+def api_twilight_events(
+    date_iso: str = Query(..., description="Local calendar date (YYYY-MM-DD)"),
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    datetime_iso: Optional[str] = Query(
+        None,
+        description="Optional UTC datetime in ISO format (e.g. 2026-01-10T03:15:00Z) used to compute currentPhase + next transition",
+    ),
+):
+    """
+    Return twilight segments for the given *local* calendar date.
+
+    This follows the same convention as /moon/events: the day window is a local
+    civil day approximated from longitude (fixed offset).
+    """
+    # Basic format validation for date
+    try:
+        datetime.fromisoformat(f"{date_iso}T00:00:00")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    return twilight_for_date(
+        lat_deg=lat,
+        lon_deg=lon,
+        date_iso=date_iso,
+        datetime_iso=datetime_iso,
+    )
