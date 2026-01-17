@@ -10,6 +10,10 @@ export interface TwilightData {
   currentPhase: string;
   nextTransitionLocal?: string | null;
   segments: TwilightSegment[];
+  sunEvents?: {
+    sunriseLocal?: string | null;
+    sunsetLocal?: string | null;
+  };
 }
 
 /**
@@ -24,7 +28,7 @@ export async function fetchTwilight(
   lat: number,
   lon: number,
   dateIso: string,
-  datetimeIso?: string
+  datetimeIso?: string,
 ): Promise<TwilightData> {
   const url = new URL("/api/py-twilight", location.origin);
   url.searchParams.set("lat", String(lat));

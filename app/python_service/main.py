@@ -9,6 +9,7 @@ from app.python_service.moon_ephem import moon_now
 from app.python_service.moon import moon_events_for_date, MoonEvents
 
 from app.python_service.twilight import twilight_for_date
+from app.python_service.sun import sun_events_for_date, SunEvents
 
 
 
@@ -105,3 +106,26 @@ def api_twilight_events(
         date_iso=date_iso,
         datetime_iso=datetime_iso,
     )
+
+@app.get("/sun/events")
+def api_sun_events(
+    date_iso: str = Query(..., description="Local calendar date (YYYY-MM-DD)"),
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+):
+    """Return Sun rise/set events for the given *local* calendar date."""
+    try:
+        datetime.fromisoformat(f"{date_iso}T00:00:00")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    events: SunEvents = sun_events_for_date(
+        lat_deg=lat,
+        lon_deg=lon,
+        date_iso=date_iso,
+    )
+
+    return {
+        "sunriseLocal": events.sunrise.isoformat() if events.sunrise else None,
+        "sunsetLocal": events.sunset.isoformat() if events.sunset else None,
+    }

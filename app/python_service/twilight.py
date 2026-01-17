@@ -13,6 +13,7 @@ from app.python_service.moon_ephem import eph, ts
 
 # Reuse your existing "local day tied to longitude" helpers (keeps conventions consistent)
 from app.python_service.moon import tz_from_longitude, local_day_bounds
+from app.python_service.sun import sun_events_for_date
 
 
 _PHASES = {
@@ -28,6 +29,10 @@ class TwilightSegment(TypedDict):
     phase: str
     startLocal: str
     endLocal: str
+
+class SunEvents(TypedDict):
+    sunriseLocal: Optional[str]
+    sunsetLocal: Optional[str]
 
 
 def _offset_str_from_tz(tzinfo) -> str:
@@ -77,8 +82,8 @@ def twilight_for_date(
       {
         "timezoneOffset": "-05:00",
         "currentPhase": "nautical",
-        "nextTransitionLocal": "2026-01-10T06:21:00-05:00" | null,
-        "segments": [{phase,startLocal,endLocal}, ...]
+        "segments": [{phase,startLocal,endLocal}, ...],
+        "sunEvents": {"sunriseLocal": "...", "sunsetLocal": "..."}
       }
     """
     tz_local = tz_from_longitude(lon_deg)
@@ -98,6 +103,9 @@ def twilight_for_date(
 
     # Skyfield function returning 0..4 = dark, astro, naut, civil, day
     f = almanac.dark_twilight_day(eph, topos)
+
+    sun_events_raw = sun_events_for_date(lat_deg=lat_deg, lon_deg=lon_deg, date_iso=date_iso)
+
 
     # Find transitions during this local civil day
     times, states = almanac.find_discrete(t0, t1, f)
@@ -143,9 +151,15 @@ def twilight_for_date(
             next_transition_local = ti.utc_datetime().astimezone(tz_local).isoformat()
             break
 
+    sun_events: SunEvents = {
+        "sunriseLocal": sun_events_raw.sunrise.isoformat() if sun_events_raw.sunrise else None,
+        "sunsetLocal": sun_events_raw.sunset.isoformat() if sun_events_raw.sunset else None,
+    }
+
     return {
         "timezoneOffset": timezone_offset,
         "currentPhase": current_phase,
         "nextTransitionLocal": next_transition_local,
         "segments": segments,
+        "sunEvents": sun_events,
     }

@@ -44,7 +44,7 @@ export default function TwilightPhaseBar({
     );
   }
 
-  const { segments, currentPhase, nextTransitionLocal } = q.data;
+  const { segments, currentPhase, nextTransitionLocal, sunEvents } = q.data;
   if (!segments?.length) return null;
 
   const startLocal = new Date(segments[0].startLocal);
@@ -54,8 +54,33 @@ export default function TwilightPhaseBar({
   const now = new Date();
   const pos = Math.max(
     0,
-    Math.min(1, (now.getTime() - startLocal.getTime()) / (totalMs || 1))
+    Math.min(1, (now.getTime() - startLocal.getTime()) / (totalMs || 1)),
   );
+
+  const sunriseLocal = sunEvents?.sunriseLocal
+    ? new Date(sunEvents.sunriseLocal)
+    : null;
+  const sunsetLocal = sunEvents?.sunsetLocal
+    ? new Date(sunEvents.sunsetLocal)
+    : null;
+  const sunrisePos = sunriseLocal
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          (sunriseLocal.getTime() - startLocal.getTime()) / (totalMs || 1),
+        ),
+      )
+    : null;
+  const sunsetPos = sunsetLocal
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          (sunsetLocal.getTime() - startLocal.getTime()) / (totalMs || 1),
+        ),
+      )
+    : null;
 
   return (
     <div className="my-4 p-4 rounded-2xl bg-white/5 backdrop-blur relative z-10">
@@ -81,6 +106,20 @@ export default function TwilightPhaseBar({
           className="absolute top-0 h-full w-0.5 bg-white"
           style={{ left: `${pos * 100}%` }}
         />
+        {sunrisePos !== null ? (
+          <div
+            className="absolute top-0 h-full w-0.5 bg-yellow-200"
+            style={{ left: `${sunrisePos * 100}%` }}
+            aria-label="Sunrise"
+          />
+        ) : null}
+        {sunsetPos !== null ? (
+          <div
+            className="absolute top-0 h-full w-0.5 bg-orange-200"
+            style={{ left: `${sunsetPos * 100}%` }}
+            aria-label="Sunset"
+          />
+        ) : null}
       </div>
 
       <div className="text-xs text-center mt-2">
@@ -93,6 +132,16 @@ export default function TwilightPhaseBar({
           </>
         ) : null}
       </div>
+      {(sunriseLocal || sunsetLocal) && (
+        <div className="mt-1 flex items-center justify-center gap-3 text-[11px] opacity-80">
+          {sunriseLocal && (
+            <span>Sunrise {formatInTimeZone(sunriseLocal, tz, "h:mm a")}</span>
+          )}
+          {sunsetLocal && (
+            <span>Sunset {formatInTimeZone(sunsetLocal, tz, "h:mm a")}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
