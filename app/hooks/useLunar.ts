@@ -12,14 +12,10 @@ import { fetchMoonNow, fetchMoonEvents } from "../providers/pyMoon";
 /**
  * A result type representing the current Moon position and illumination
  * from both the internal Python ephemeris service and the external
- * SunCalc library. The `whenISO` field reflects the current local
- * timestamp formatted in the provided timezone.
+ * SunCalc library. The `whenISO` field reflects the timestamp used
+ * for the calculation.
  */
 export type LunarNowResult = {
-  /**
-   * Local time formatted as ISO 8601 in the user's timezone. This is
-   * primarily used for display purposes on the UI.
-   */
   whenISO: string;
   /** Data computed by the internal Python ephemeris service. */
   internal: {
@@ -28,7 +24,7 @@ export type LunarNowResult = {
     illumPct: number;
     phaseName?: string;
   };
-  /** Data computed by the external SunCalc/MET providers. */
+  /** Data computed via the external SunCalc library. */
   external: {
     altDeg: number;
     azDeg: number;
@@ -37,21 +33,18 @@ export type LunarNowResult = {
   };
 };
 
-/**
- * A result type representing the lunar rise, set and culmination times
- * for the given date. It contains both internal and external results.
- */
-export type LunarTodayResult = {
+export type MoonEventsResult = {
+  /** Internal (Python service) event times. */
   internal: {
     rise?: string;
     set?: string;
     highMoon?: string;
     lowMoon?: string;
     phaseName?: string;
-
     prevRise?: string;
     prevSet?: string;
   };
+  /** External (MET Norway) event times. */
   external: {
     rise?: string;
     set?: string;
@@ -71,10 +64,51 @@ function shiftLocalDate(base: Date, tz: string, deltaDays: number): string {
   return formatInTimeZone(d, tz, "yyyy-MM-dd");
 }
 
-function isPast(iso: string | undefined, now: Date): boolean {
-  if (!iso) return false;
+function parseIso(iso: string | undefined): number | null {
+  if (!iso) return null;
   const t = new Date(iso).getTime();
-  return Number.isFinite(t) && t <= now.getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function isPast(iso: string | undefined, now: Date): boolean {
+  const t = parseIso(iso);
+  return t !== null && t <= now.getTime();
+}
+
+function pickLatestBeforeIso(
+  candidates: Array<string | undefined>,
+  now: Date,
+): string | undefined {
+  const nowT = now.getTime();
+  let bestT = -Infinity;
+  let bestIso: string | undefined;
+  for (const iso of candidates) {
+    const t = parseIso(iso);
+    if (t === null) continue;
+    if (t <= nowT && t > bestT) {
+      bestT = t;
+      bestIso = iso;
+    }
+  }
+  return bestIso;
+}
+
+function pickEarliestAfterIso(
+  candidates: Array<string | undefined>,
+  now: Date,
+): string | undefined {
+  const nowT = now.getTime();
+  let bestT = Infinity;
+  let bestIso: string | undefined;
+  for (const iso of candidates) {
+    const t = parseIso(iso);
+    if (t === null) continue;
+    if (t >= nowT && t < bestT) {
+      bestT = t;
+      bestIso = iso;
+    }
+  }
+  return bestIso;
 }
 
 /**
@@ -86,15 +120,15 @@ function isPast(iso: string | undefined, now: Date): boolean {
  */
 export function useLunarNow(lat: number, lon: number, tz: string) {
   return useQuery<LunarNowResult>({
-    queryKey: ["moon-now-compare", lat, lon, tz],
+    queryKey: ["lunar-now-compare", lat, lon, tz],
     queryFn: async () => {
       const now = new Date();
-      // Format the local timestamp for display using the provided timezone.
       const whenISO = formatInTimeZone(now, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
-      // Use the ISO string in UTC for the internal API call.
+
+      // Convert to UTC ISO for the Python service
       const isoUtc = now.toISOString();
 
-      // Internal calculation via Python service
+      // Internal (Python) calculation
       const py = await fetchMoonNow(lat, lon, isoUtc);
       // External calculation via SunCalc
       const sc = getMoonNow(lat, lon, now);
@@ -115,40 +149,39 @@ export function useLunarNow(lat: number, lon: number, tz: string) {
         },
       };
     },
-    // Refetch once per minute
+    // Refresh every minute
     refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 }
 
-function approximateHighMoon(
-  rise: string | undefined,
-  set: string | undefined,
-  tz: string
-): string | undefined {
-  if (!rise || !set) return undefined;
-  const riseDate = new Date(rise);
-  const setDate = new Date(set);
-  if (
-    !Number.isFinite(riseDate.getTime()) ||
-    !Number.isFinite(setDate.getTime())
-  )
-    return undefined;
-  // Midpoint timestamp between rise and set
-  const midMillis =
-    riseDate.getTime() + (setDate.getTime() - riseDate.getTime()) / 2;
-  const midDate = new Date(midMillis);
-  return formatInTimeZone(midDate, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+/**
+ * Approximate a “high moon” time when the provider doesn’t return one.
+ * This is a simple midpoint of the above-horizon window.
+ */
+function approximateHighMoon(riseISO?: string, setISO?: string, tz?: string) {
+  if (!riseISO || !setISO) return undefined;
+  const riseT = parseIso(riseISO);
+  const setT = parseIso(setISO);
+  if (riseT === null || setT === null) return undefined;
+  const mid = new Date(riseT + (setT - riseT) / 2);
+  return tz
+    ? formatInTimeZone(mid, tz, "yyyy-MM-dd'T'HH:mm:ssXXX")
+    : mid.toISOString();
 }
 
 /**
- * useMoonToday compares the daily lunar events (rise, set, high moon,
- * low moon) and phase names between the internal Python ephemeris and
+ * useMoonToday fetches moon rise/set/high/low event times for the current
+ * local date (in the user's timezone) from both the internal Python service and
  * the external MET Norway API. It returns an object containing both
  * sets of results. The query is considered fresh for thirty minutes.
+ *
+ * ✅ Goal behavior implemented:
+ * - If moon is UP (alt > 0): show most recent moonrise, and next moonset.
+ * - If moon is DOWN (alt < 0): show next moonrise, and most recent moonset.
  */
-
 export function useMoonToday(lat: number, lon: number, tz: string) {
-  return useQuery({
+  return useQuery<MoonEventsResult>({
     queryKey: ["moon-today-compare", lat, lon, tz],
     queryFn: async () => {
       const now = new Date();
@@ -167,8 +200,18 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
       const setForSwitch = extToday.set ?? pyToday.set;
       const moonsetPassed = isPast(setForSwitch, now);
 
-      const activeDate = moonsetPassed ? tomorrowLocal : todayLocal;
-      const previousDate = moonsetPassed ? todayLocal : yesterdayLocal;
+      // Determine if the Moon is currently above the horizon (altitude > 0°).
+      // We use the existing SunCalc helper here to avoid additional network calls.
+      const scNow = getMoonNow(lat, lon, now);
+      const moonIsUp = scNow.altDeg > 0;
+
+      // Only roll over to tomorrow once today's moonset has passed AND the moon is down.
+      // - If the moon is up: show the rise that already happened and the set that will happen.
+      // - If the moon is down: show the next upcoming rise.
+      const activeDate =
+        moonsetPassed && !moonIsUp ? tomorrowLocal : todayLocal;
+      const previousDate =
+        activeDate === todayLocal ? yesterdayLocal : todayLocal;
 
       const [pyActive, pyPrev, extActive, extPrev] = await Promise.all([
         activeDate === todayLocal
@@ -212,86 +255,142 @@ export function useMoonToday(lat: number, lon: number, tz: string) {
         return extNextCache;
       };
 
-      // Start with "active" day values
-      let internalRise = pyActive.rise;
-      let internalSet = pyActive.set;
-      let externalRise = extActive.rise;
-      let externalSet = extActive.set;
+      // Pick the rise/set that match the current state of the Moon.
+      //
+      // Goal behavior:
+      // - If the moon is currently up (alt > 0):
+      //   - Moonrise shows when it most recently rose (could be yesterday)
+      //   - Moonset shows when it will next set (could be tomorrow)
+      // - If the moon is currently down (alt < 0):
+      //   - Moonrise shows the next upcoming rise
+      //   - Moonset shows when it most recently set
+      let internalRise: string | undefined;
+      let internalSet: string | undefined;
+      let externalRise: string | undefined;
+      let externalSet: string | undefined;
 
-      // Internal rise fallback (missing OR already in the past => use nextLocal)
-      if (!internalRise || isPast(internalRise, now)) {
-        try {
-          const pyNext = await getPyNext();
-          if (pyNext.rise) internalRise = pyNext.rise;
-        } catch {
-          // ignore; keep original
-        }
-      }
-      // Internal set fallback (missing OR already in the past => use nextLocal)
-      if (!internalSet || isPast(internalSet, now)) {
-        try {
-          const pyNext = await getPyNext();
-          if (pyNext.set) internalSet = pyNext.set;
-        } catch {
-          // ignore; keep original
-        }
-      }
+      if (moonIsUp) {
+        // Most recent rise at/before now
+        internalRise =
+          pickLatestBeforeIso([pyActive.rise, pyPrev.rise], now) ??
+          pyActive.rise ??
+          pyPrev.rise;
+        externalRise =
+          pickLatestBeforeIso([extActive.rise, extPrev.rise], now) ??
+          extActive.rise ??
+          extPrev.rise;
 
-      // External fallbacks (usually not needed, but keeps UI stable)
-      if (!externalRise || isPast(externalRise, now)) {
-        try {
-          const extNext = await getExtNext();
-          if (extNext.rise) externalRise = extNext.rise;
-        } catch {
-          // ignore
+        // Next set at/after now
+        const internalSetCandidates: Array<string | undefined> = [pyActive.set];
+        const externalSetCandidates: Array<string | undefined> = [
+          extActive.set,
+        ];
+
+        if (!pyActive.set || isPast(pyActive.set, now)) {
+          try {
+            const pyNext = await getPyNext();
+            internalSetCandidates.push(pyNext.set);
+          } catch {
+            // ignore
+          }
         }
-      }
-      if (!externalSet || isPast(externalSet, now)) {
-        try {
-          const extNext = await getExtNext();
-          if (extNext.set) externalSet = extNext.set;
-        } catch {
-          // ignore
+        if (!extActive.set || isPast(extActive.set, now)) {
+          try {
+            const extNext = await getExtNext();
+            externalSetCandidates.push(extNext.set);
+          } catch {
+            // ignore
+          }
         }
+
+        internalSet =
+          pickEarliestAfterIso(internalSetCandidates, now) ??
+          pyActive.set ??
+          internalSetCandidates.find((v) => !!v);
+        externalSet =
+          pickEarliestAfterIso(externalSetCandidates, now) ??
+          extActive.set ??
+          externalSetCandidates.find((v) => !!v);
+      } else {
+        // Next upcoming rise at/after now
+        const internalRiseCandidates: Array<string | undefined> = [
+          pyActive.rise,
+        ];
+        const externalRiseCandidates: Array<string | undefined> = [
+          extActive.rise,
+        ];
+
+        if (!pyActive.rise || isPast(pyActive.rise, now)) {
+          try {
+            const pyNext = await getPyNext();
+            internalRiseCandidates.push(pyNext.rise);
+          } catch {
+            // ignore
+          }
+        }
+        if (!extActive.rise || isPast(extActive.rise, now)) {
+          try {
+            const extNext = await getExtNext();
+            externalRiseCandidates.push(extNext.rise);
+          } catch {
+            // ignore
+          }
+        }
+
+        internalRise =
+          pickEarliestAfterIso(internalRiseCandidates, now) ??
+          pyActive.rise ??
+          internalRiseCandidates.find((v) => !!v);
+        externalRise =
+          pickEarliestAfterIso(externalRiseCandidates, now) ??
+          extActive.rise ??
+          externalRiseCandidates.find((v) => !!v);
+
+        // Most recent set at/before now
+        internalSet =
+          pickLatestBeforeIso([pyPrev.set, pyActive.set], now) ??
+          pyPrev.set ??
+          pyActive.set;
+        externalSet =
+          pickLatestBeforeIso([extPrev.set, extActive.set], now) ??
+          extPrev.set ??
+          extActive.set;
       }
 
       const fallbackInternalHigh = approximateHighMoon(
         pyActive.rise,
         pyActive.set,
-        tz
+        tz,
       );
       const fallbackExternalHigh = approximateHighMoon(
         extActive.rise,
         extActive.set,
-        tz
+        tz,
       );
 
       return {
         internal: {
           rise: internalRise,
           set: internalSet,
-          // prefer the value from the Python service, but use the fallback if undefined
-          highMoon:
-            pyActive.high_moon ??
-            (pyActive as any).highMoon ??
-            fallbackInternalHigh,
-          lowMoon: pyActive.low_moon ?? (pyActive as any).lowMoon,
-          phaseName: pyActive.phase_name ?? (pyActive as any).phaseName,
+          // prefer the value from the Python service, but use a fallback if missing
+          highMoon: pyActive.highMoon ?? fallbackInternalHigh,
+          lowMoon: pyActive.lowMoon,
+          phaseName: pyActive.phaseName,
           prevRise: pyPrev.rise,
           prevSet: pyPrev.set,
         },
         external: {
           rise: externalRise,
           set: externalSet,
-          // prefer the value from MET, but use the fallback if undefined
-          highMoon: (extActive as any).highMoon ?? fallbackExternalHigh,
-          lowMoon: (extActive as any).lowMoon,
-          phaseName: phaseNameFromDeg((extActive as any).phaseDeg),
+          highMoon: extActive.highMoon ?? fallbackExternalHigh,
+          lowMoon: extActive.lowMoon,
+          phaseName:
+            extActive.phaseName ?? phaseNameFromDeg(extActive.phase ?? 0),
           prevRise: extPrev.rise,
           prevSet: extPrev.set,
         },
       };
     },
-    staleTime: 60_000 * 30,
+    staleTime: 30 * 60 * 1000,
   });
 }
