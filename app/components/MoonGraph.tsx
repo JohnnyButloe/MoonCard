@@ -180,107 +180,112 @@ export default function MoonAltitudeGraph({
   const sunDotY = yOnCurve(sunCycleT);
 
   return (
-    <div className="my-4 w-full overflow-hidden rounded-2xl aspect-[3/1]">
-      <svg
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        preserveAspectRatio="xMidYMid meet"
-        className="block h-full w-full"
-      >
-        <defs>
-          <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#0a213f" />
-            <stop offset="100%" stopColor="#000" />
-          </linearGradient>
+    <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
+      <div className="mb-3 text-xs uppercase tracking-[0.3em] text-sky-200/60">
+        Moon altitude
+      </div>
+      <div className="w-full overflow-hidden rounded-xl aspect-[4/1] bg-black/60">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="block h-full w-full"
+        >
+          <defs>
+            <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#0a213f" />
+              <stop offset="100%" stopColor="#000" />
+            </linearGradient>
 
-          {/* Moon glow */}
-          <radialGradient
-            id="moon-glow"
-            gradientUnits="userSpaceOnUse"
-            cx={dotX}
-            cy={dotY}
-            r={18}
-          >
-            <stop offset="0%" stopColor="white" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#5c84c4" stopOpacity="0" />
-          </radialGradient>
-
-          {/* Sun glow (conditionally included) */}
-          {sunDataReady ? (
+            {/* Moon glow */}
             <radialGradient
-              id="sun-glow"
+              id="moon-glow"
               gradientUnits="userSpaceOnUse"
-              cx={sunDotX}
-              cy={sunDotY}
+              cx={dotX}
+              cy={dotY}
               r={18}
             >
-              <stop offset="0%" stopColor="#fde047" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
+              <stop offset="0%" stopColor="white" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#5c84c4" stopOpacity="0" />
             </radialGradient>
-          ) : null}
 
-          {/* Clip path to keep glow above the horizon */}
-          <clipPath id="above-horizon">
-            <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
-          </clipPath>
-        </defs>
+            {/* Sun glow (conditionally included) */}
+            {sunDataReady ? (
+              <radialGradient
+                id="sun-glow"
+                gradientUnits="userSpaceOnUse"
+                cx={sunDotX}
+                cy={sunDotY}
+                r={18}
+              >
+                <stop offset="0%" stopColor="#fde047" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
+              </radialGradient>
+            ) : null}
 
-        {/* Background */}
-        <rect width={VIEW_W} height={VIEW_H} fill="url(#sky)" />
+            {/* Clip path to keep glow above the horizon */}
+            <clipPath id="above-horizon">
+              <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
+            </clipPath>
+          </defs>
 
-        {/* Below-horizon area */}
-        <rect
-          x="0"
-          y={HORIZON_Y}
-          width={VIEW_W}
-          height={VIEW_H - HORIZON_Y}
-          fill="#000"
-        />
+          {/* Background */}
+          <rect width={VIEW_W} height={VIEW_H} fill="url(#sky)" />
 
-        {/* Moon glow (clipped to above horizon) */}
-        <rect
-          width={VIEW_W}
-          height={VIEW_H}
-          fill="url(#moon-glow)"
-          clipPath="url(#above-horizon)"
-        />
+          {/* Below-horizon area */}
+          <rect
+            x="0"
+            y={HORIZON_Y}
+            width={VIEW_W}
+            height={VIEW_H - HORIZON_Y}
+            fill="#000"
+          />
 
-        {/* Sun glow (if ready) */}
-        {sunDataReady ? (
+          {/* Moon glow (clipped to above horizon) */}
           <rect
             width={VIEW_W}
             height={VIEW_H}
-            fill="url(#sun-glow)"
+            fill="url(#moon-glow)"
             clipPath="url(#above-horizon)"
           />
-        ) : null}
 
-        {/* Horizon line */}
-        <line
-          x1="0"
-          y1={HORIZON_Y}
-          x2={VIEW_W}
-          y2={HORIZON_Y}
-          stroke="#6b7280"
-          strokeWidth="0.6"
-          vectorEffect="non-scaling-stroke"
-        />
+          {/* Sun glow (if ready) */}
+          {sunDataReady ? (
+            <rect
+              width={VIEW_W}
+              height={VIEW_H}
+              fill="url(#sun-glow)"
+              clipPath="url(#above-horizon)"
+            />
+          ) : null}
 
-        {/* Altitude curve */}
-        <path
-          d={CURVE_PATH}
-          stroke="#9ca3af"
-          strokeWidth="1.2"
-          vectorEffect="non-scaling-stroke"
-          fill="none"
-        />
+          {/* Horizon line */}
+          <line
+            x1="0"
+            y1={HORIZON_Y}
+            x2={VIEW_W}
+            y2={HORIZON_Y}
+            stroke="#6b7280"
+            strokeWidth="0.6"
+            vectorEffect="non-scaling-stroke"
+          />
 
-        {/* Moon dot */}
-        <circle cx={dotX} cy={dotY} r="2.5" fill="#fff" />
-        {/* Sun dot (conditionally displayed) */}
-        {sunDataReady ? (
-          <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
-        ) : null}
-      </svg>
+          {/* Altitude curve */}
+          <path
+            d={CURVE_PATH}
+            stroke="#9ca3af"
+            strokeWidth="1.2"
+            vectorEffect="non-scaling-stroke"
+            fill="none"
+          />
+
+          {/* Moon dot */}
+          <circle cx={dotX} cy={dotY} r="2.5" fill="#fff" />
+          {/* Sun dot (conditionally displayed) */}
+          {sunDataReady ? (
+            <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
+          ) : null}
+        </svg>
+      </div>
     </div>
   );
 }

@@ -73,15 +73,17 @@ export default function MoonNowCard({
   const phaseIllumPct = now.internal.illumPct ?? now.external.illumPct;
 
   return (
-    <div className="grid gap-4 p-6 rounded-2xl shadow bg-white/5 backdrop-blur">
+    <div className="grid gap-4 rounded-2xl bg-white/5 p-6 shadow-xl shadow-black/20 ring-1 ring-white/10 backdrop-blur">
       <header>
         <h2 className="text-xl font-semibold">Moon now</h2>
         {/* Display the local timestamp from the now hook */}
         <p className="text-sm opacity-70">
           {formatLocalDateTime(now.whenISO, tz)}
         </p>
-        <span className="font-semibold">internal:</span> python_service ·{" "}
-        <span className="font-semibold">external:</span> SunCalc
+        <p className="text-xs opacity-60">
+          <span className="font-semibold">internal:</span> python_service ·{" "}
+          <span className="font-semibold">external:</span> SunCalc
+        </p>
       </header>
 
       {/* Current illumination, phase, altitude and azimuth */}
@@ -96,7 +98,7 @@ export default function MoonNowCard({
         </div>
         <div>
           <div className="flex items-center gap-4">
-            <div className="text-2xl font-semifold">
+            <div className="text-2xl font-semibold">
               {today.internal.phaseName ?? today.external.phaseName ?? "-"}
             </div>
             <MoonPhaseCircle illuminationPct={phaseIllumPct} />
