@@ -31,6 +31,57 @@ function formatLocalDateTime(iso: string | undefined, tz: string): string {
   }).format(d);
 }
 
+function dayKeyInTimeZone(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: tz,
+  }).format(date);
+}
+
+function formatTimeOrDateTime(
+  iso: string | undefined,
+  tz: string,
+  referenceIso: string | undefined,
+): string {
+  if (!iso) return "—";
+  const eventDate = new Date(iso);
+  if (!Number.isFinite(eventDate.getTime())) return "—";
+
+  const referenceDate = referenceIso ? new Date(referenceIso) : new Date();
+  const sameDay =
+    Number.isFinite(referenceDate.getTime()) &&
+    dayKeyInTimeZone(eventDate, tz) === dayKeyInTimeZone(referenceDate, tz);
+
+  if (sameDay) {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: tz,
+    }).format(eventDate);
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  }).format(eventDate);
+}
+
+function toCompass(azDeg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((azDeg % 360) + 360) % 360;
+  return dirs[Math.round(normalized / 45) % dirs.length];
+}
+
+function formatAzimuthWithDirection(azDeg: number): string {
+  const normalized = Math.round(((azDeg % 360) + 360) % 360);
+  return `${toCompass(normalized)} (${normalized}°)`;
+}
+
 /**
  * MoonNowCard displays current lunar information and today's lunar events.
  * It now supports comparison between the internal Python ephemeris service
@@ -138,8 +189,8 @@ export default function MoonNowCard({
         <div className="relative">
           <div className="group inline-flex flex-col">
             <div className="text-2xl font-semibold">
-              {now.internal.azDeg.toFixed(0)}° / {now.external.azDeg.toFixed(0)}
-              °
+              {formatAzimuthWithDirection(now.internal.azDeg)} /{" "}
+              {formatAzimuthWithDirection(now.external.azDeg)}
             </div>
             <div className="opacity-70">Azimuth</div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
@@ -156,17 +207,19 @@ export default function MoonNowCard({
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         {/* Moonrise */}
         <div>
-          <div className="opacity-70">Moonrise (East)</div>
-          <div>
-            {formatLocalDateTime(today.internal.rise, tz)} /{" "}
-            {formatLocalDateTime(today.external.rise, tz)}
+          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.rise, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.rise, tz, now.whenISO)}
           </div>
-          <div className="text-xs opacity-70 mt-1">
+          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+            Moonrise (East)
+          </div>
+          <div className="mt-1 text-xs text-slate-300/70">
             Previous moonrise:{" "}
-            {formatLocalDateTime(today.internal.prevRise, tz)} /{" "}
-            {formatLocalDateTime(today.external.prevRise, tz)}
+            {formatTimeOrDateTime(today.internal.prevRise, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.prevRise, tz, now.whenISO)}
           </div>
-          <div className="mt-1 text-xs opacity-60">
+          <div className="mt-1 text-xs text-slate-300/60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
           </div>
@@ -174,29 +227,30 @@ export default function MoonNowCard({
 
         {/* High moon */}
         <div>
-          <div className="opacity-70">High moon</div>
-          <div>
-            {formatLocalDateTime(today.internal.highMoon, tz)} /{" "}
-            {formatLocalDateTime(today.external.highMoon, tz)}
+          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.highMoon, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.highMoon, tz, now.whenISO)}
           </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+            High moon
           </div>
         </div>
 
         {/* Moonset */}
         <div>
-          <div className="opacity-70">Moonset (West)</div>
-          <div>
-            {formatLocalDateTime(today.internal.set, tz)} /{" "}
-            {formatLocalDateTime(today.external.set, tz)}
+          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.set, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.set, tz, now.whenISO)}
           </div>
-          <div className="text-xs opacity-70 mt-1">
-            Previous moonset: {formatLocalDateTime(today.internal.prevSet, tz)}{" "}
-            / {formatLocalDateTime(today.external.prevSet, tz)}
+          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+            Moonset (West)
           </div>
-          <div className="mt-1 text-xs opacity-60">
+          <div className="mt-1 text-xs text-slate-300/70">
+            Previous moonset:{" "}
+            {formatTimeOrDateTime(today.internal.prevSet, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.prevSet, tz, now.whenISO)}
+          </div>
+          <div className="mt-1 text-xs text-slate-300/60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
           </div>
@@ -204,14 +258,12 @@ export default function MoonNowCard({
 
         {/* Low moon */}
         <div>
-          <div className="opacity-70">Low moon</div>
-          <div>
-            {formatLocalDateTime(today.internal.lowMoon, tz)} /{" "}
-            {formatLocalDateTime(today.external.lowMoon, tz)}
+          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.lowMoon, tz, now.whenISO)} /{" "}
+            {formatTimeOrDateTime(today.external.lowMoon, tz, now.whenISO)}
           </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+            Low moon
           </div>
         </div>
       </section>
