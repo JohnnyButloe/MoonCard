@@ -2,9 +2,8 @@
 "use client";
 
 import { useLunarNow, useMoonToday } from "../hooks/useLunar";
-import { useQuery } from "@tanstack/react-query";
+import { useSunToday } from "../hooks/useSun";
 import { formatInTimeZone } from "date-fns-tz";
-import next from "next";
 
 // SVG coordinates space (wide + short)
 const VIEW_W = 100;
@@ -55,36 +54,10 @@ export default function MoonAltitudeGraph({
   const nowQ = useLunarNow(lat, lon, tz);
   const todayQ = useMoonToday(lat, lon, tz);
 
-  // Fetch sun rise/set times directly from the /api/py-sun endpoint.
-  // The query computes the local date in the given timezone and requests
-  // sunriseLocal and sunsetLocal. It refreshes every 10 minutes.
-  const sunQ = useQuery<{
-    sunriseLocal?: string | null;
-    sunsetLocal?: string | null;
-  }>({
-    queryKey: ["sun", lat, lon, tz],
-    queryFn: async () => {
-      const now = new Date();
-      const dateIso = formatInTimeZone(now, tz, "yyyy-MM-dd");
-      const url = new URL("/api/py-sun", location.origin);
-      url.searchParams.set("lat", String(lat));
-      url.searchParams.set("lon", String(lon));
-      url.searchParams.set("date_iso", dateIso);
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      if (!res.ok) throw new Error("py-sun-failed");
-      return res.json();
-    },
-    refetchInterval: 10 * 60 * 1000,
-  });
+  const sunQ = useSunToday(lat, lon, tz);
 
   // Only render once lunar data is ready
-  const ready =
-    !!nowQ.data &&
-    !!todayQ.data &&
-    !nowQ.isLoading &&
-    !todayQ.isLoading &&
-    !nowQ.error &&
-    !todayQ.error;
+  const ready = !!nowQ.data && !!todayQ.data && !nowQ.error && !todayQ.error;
 
   if (!ready) return null;
 
@@ -156,7 +129,7 @@ export default function MoonAltitudeGraph({
 
   // Sun position: pad sunrise/sunset by half the daylight span.
   let sunCycleT = 0.25;
-  const sunDataReady = !!sunQ.data && !sunQ.isLoading && !sunQ.error;
+  const sunDataReady = !!sunQ.data && !sunQ.error;
   if (sunDataReady) {
     const sunriseIso = sunQ.data!.sunriseLocal ?? null;
     const sunsetIso = sunQ.data!.sunsetLocal ?? null;
@@ -179,10 +152,26 @@ export default function MoonAltitudeGraph({
   const sunDotX = sunCycleT * VIEW_W;
   const sunDotY = yOnCurve(sunCycleT);
 
+  const lastUpdatedMs = Math.max(
+    nowQ.dataUpdatedAt ?? 0,
+    todayQ.dataUpdatedAt ?? 0,
+    sunQ.dataUpdatedAt ?? 0,
+  );
+  const lastUpdatedLabel = lastUpdatedMs
+    ? formatInTimeZone(new Date(lastUpdatedMs), tz, "h:mm a")
+    : "—";
+  const isUpdating = nowQ.isFetching || todayQ.isFetching || sunQ.isFetching;
+
   return (
     <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
-      <div className="mb-3 text-xs uppercase tracking-[0.3em] text-sky-200/60">
-        Moon altitude
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
+          Moon/Sun altitude
+        </div>
+        <div className="text-[11px] text-sky-100/70">
+          Updated {lastUpdatedLabel}
+          {isUpdating ? " · updating" : ""}
+        </div>
       </div>
       <div className="w-full overflow-hidden rounded-xl aspect-[4/1] bg-black/60">
         <svg

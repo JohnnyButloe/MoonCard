@@ -71,9 +71,12 @@ function adjustMoonsetForNight(events: MoonEvents): MoonEvents {
 export async function fetchMoonNow(
   lat: number,
   lon: number,
-  dateTimeIso: string
+  dateTimeIso: string,
+  baseUrl?: string
 ): Promise<MoonNow> {
-  const url = new URL("/api/py-moon", location.origin);
+  const origin = resolveBaseUrl(baseUrl);
+  if (!origin) throw new Error("missing-base-url");
+  const url = new URL("/api/py-moon", origin);
   url.searchParams.set("mode", "now");
   url.searchParams.set("datetime_iso", dateTimeIso);
   url.searchParams.set("lat", String(lat));
@@ -86,9 +89,12 @@ export async function fetchMoonNow(
 export async function fetchMoonEvents(
   lat: number,
   lon: number,
-  dateIso: string
+  dateIso: string,
+  baseUrl?: string
 ): Promise<MoonEvents> {
-  const url = new URL("/api/py-moon", location.origin);
+  const origin = resolveBaseUrl(baseUrl);
+  if (!origin) throw new Error("missing-base-url");
+  const url = new URL("/api/py-moon", origin);
   url.searchParams.set("mode", "events");
   url.searchParams.set("date_iso", dateIso);
   url.searchParams.set("lat", String(lat));
@@ -99,3 +105,4 @@ export async function fetchMoonEvents(
   const events: MoonEvents = await res.json();
   return adjustMoonsetForNight(events);
 }
+import { resolveBaseUrl } from "../lib/baseUrl";

@@ -71,6 +71,15 @@ export default function MoonNowCard({
   // Use internal illumination as primary source for phase visual,
   // falling back to the external value if needed.
   const phaseIllumPct = now.internal.illumPct ?? now.external.illumPct;
+  const lastUpdatedMs = Math.max(
+    nowQ.dataUpdatedAt ?? 0,
+    todayQ.dataUpdatedAt ?? 0,
+  );
+  const lastUpdatedLabel =
+    lastUpdatedMs > 0
+      ? formatLocalTime(new Date(lastUpdatedMs).toISOString(), tz)
+      : "—";
+  const isUpdating = nowQ.isFetching || todayQ.isFetching;
 
   return (
     <div className="grid gap-4 rounded-2xl bg-white/5 p-6 shadow-xl shadow-black/20 ring-1 ring-white/10 backdrop-blur">
@@ -83,6 +92,10 @@ export default function MoonNowCard({
         <p className="text-xs opacity-60">
           <span className="font-semibold">internal:</span> python_service ·{" "}
           <span className="font-semibold">external:</span> SunCalc
+        </p>
+        <p className="text-xs opacity-60">
+          Updated {lastUpdatedLabel}
+          {isUpdating ? " · updating" : ""}
         </p>
       </header>
 
@@ -106,21 +119,35 @@ export default function MoonNowCard({
           <div className="opacity-70">phase</div>
         </div>
         {/* Altitude */}
-        <div>
-          <div className="text-2xl font-semibold">
-            {now.internal.altDeg.toFixed(1)}° / {now.external.altDeg.toFixed(1)}
-            °
+        <div className="relative">
+          <div className="group inline-flex flex-col">
+            <div className="text-2xl font-semibold">
+              {now.internal.altDeg.toFixed(0)}° /{" "}
+              {now.external.altDeg.toFixed(0)}°
+            </div>
+            <div className="opacity-70">Altitude</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+              Altitude relative to the horizon (0° = on the horizon, positive =
+              above, negative = below).
+            </div>
           </div>
-          <div className="opacity-70">altitude</div>
           <div className="mt-1 text-xs opacity-60"></div>
         </div>
 
         {/* Azimuth */}
-        <div>
-          <div className="text-2xl font-semibold">
-            {now.internal.azDeg.toFixed(0)}° / {now.external.azDeg.toFixed(0)}°
+        <div className="relative">
+          <div className="group inline-flex flex-col">
+            <div className="text-2xl font-semibold">
+              {now.internal.azDeg.toFixed(0)}° / {now.external.azDeg.toFixed(0)}
+              °
+            </div>
+            <div className="opacity-70">Azimuth</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+              Azimuth is the Moon’s compass direction along the horizon,
+              measured in degrees from true north (0°), moving eastward (90°),
+              south (180°), and west (270°).
+            </div>
           </div>
-          <div className="opacity-70">azimuth</div>
           <div className="mt-1 text-xs opacity-60"></div>
         </div>
       </section>

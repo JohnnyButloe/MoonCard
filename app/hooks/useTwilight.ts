@@ -2,8 +2,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { formatInTimeZone } from "date-fns-tz";
-import { fetchTwilight, TwilightData } from "../providers/pyTwilight";
+import { twilightQueryOptions, type TwilightData } from "../queries/twilight";
+
+export type { TwilightData };
 
 /**
  * useTwilight fetches twilight segments for the given lat/lon/timezone.
@@ -11,15 +12,5 @@ import { fetchTwilight, TwilightData } from "../providers/pyTwilight";
  * time to the API so the backend can compute `currentPhase` and `nextTransitionLocal`.
  */
 export function useTwilight(lat: number, lon: number, tz: string) {
-  return useQuery<TwilightData>({
-    queryKey: ["twilight", lat, lon, tz],
-    queryFn: async () => {
-      const now = new Date();
-      const dateIso = formatInTimeZone(now, tz, "yyyy-MM-dd");
-      const isoUtc = now.toISOString();
-      return fetchTwilight(lat, lon, dateIso, isoUtc);
-    },
-    // Twilight phases change slowly; refresh every 10 minutes.
-    refetchInterval: 10 * 60 * 1000,
-  });
+  return useQuery<TwilightData>(twilightQueryOptions({ lat, lon, tz }));
 }

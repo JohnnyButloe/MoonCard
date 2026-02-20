@@ -1,4 +1,5 @@
 import { formatInTimeZone } from "date-fns-tz";
+import { resolveBaseUrl } from "../lib/baseUrl";
 
 // NOTE: This provider adapts MET Norway Sunrise 3.0 (Moon) responses into our normalized shape.
 // It is intentionally kept separate from the internal Python ephemeris provider (pyMoon).
@@ -27,8 +28,11 @@ export async function fetchMoonToday(params: {
   lon: number;
   date: string;
   tz: string;
+  baseUrl?: string;
 }): Promise<MoonToday> {
-  const url = new URL("/api/metno/moon", location.origin);
+  const origin = resolveBaseUrl(params.baseUrl);
+  if (!origin) throw new Error("missing-base-url");
+  const url = new URL("/api/metno/moon", origin);
   url.searchParams.set("lat", String(params.lat));
   url.searchParams.set("lon", String(params.lon));
   url.searchParams.set("date", params.date);

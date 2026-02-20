@@ -71,6 +71,11 @@ export default function TwilightPhaseBar({
   const { segments, currentPhase, nextTransitionLocal, sunEvents } = q.data;
   if (!segments?.length) return null;
 
+  const lastUpdatedLabel = q.dataUpdatedAt
+    ? formatInTimeZone(new Date(q.dataUpdatedAt), tz, "h:mm a")
+    : "—";
+  const isUpdating = q.isFetching;
+
   const weightedSegments = segments
     .map((seg) => {
       const segStart = new Date(seg.startLocal);
@@ -127,19 +132,25 @@ export default function TwilightPhaseBar({
 
   return (
     <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
           Twilight
         </div>
-        <div className="text-xs text-sky-100/80">
-          <span className="font-semibold capitalize">{currentPhase}</span>
-          {nextTransitionLocal ? (
-            <>
-              {" "}
-              · next:{" "}
-              {formatInTimeZone(new Date(nextTransitionLocal), tz, "h:mm a z")}
-            </>
-          ) : null}
+        <div className="text-right text-xs text-sky-100/80">
+          <div>
+            <span className="font-semibold capitalize">{currentPhase}</span>
+            {nextTransitionLocal ? (
+              <>
+                {" "}
+                · next:{" "}
+                {formatInTimeZone(new Date(nextTransitionLocal), tz, "h:mm a z")}
+              </>
+            ) : null}
+          </div>
+          <div className="mt-0.5 text-[11px] text-sky-100/60">
+            Updated {lastUpdatedLabel}
+            {isUpdating ? " · updating" : ""}
+          </div>
         </div>
       </div>
 
