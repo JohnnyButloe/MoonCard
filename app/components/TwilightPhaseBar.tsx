@@ -68,7 +68,7 @@ export default function TwilightPhaseBar({
     );
   }
 
-  const { segments, currentPhase, nextTransitionLocal, sunEvents } = q.data;
+  const { segments, currentPhase, sunEvents } = q.data;
   if (!segments?.length) return null;
 
   const lastUpdatedLabel = q.dataUpdatedAt
@@ -139,13 +139,6 @@ export default function TwilightPhaseBar({
         <div className="text-right text-xs text-sky-100/80">
           <div>
             <span className="font-semibold capitalize">{currentPhase}</span>
-            {nextTransitionLocal ? (
-              <>
-                {" "}
-                · next:{" "}
-                {formatInTimeZone(new Date(nextTransitionLocal), tz, "h:mm a z")}
-              </>
-            ) : null}
           </div>
           <div className="mt-0.5 text-[11px] text-sky-100/60">
             Updated {lastUpdatedLabel}

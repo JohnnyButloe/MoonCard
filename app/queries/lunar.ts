@@ -14,6 +14,10 @@ export type LunarNowResult = {
     altDeg: number;
     azDeg: number;
     illumPct: number;
+    illumination: number;
+    waxing: boolean;
+    phaseAngleDeg: number;
+    brightLimbAngleDeg: number;
     phaseName?: string;
   };
   external: {
@@ -117,7 +121,12 @@ function approximateHighMoon(riseISO?: string, setISO?: string, tz?: string) {
     : mid.toISOString();
 }
 
-export function lunarNowQueryOptions({ lat, lon, tz, baseUrl }: LunarQueryArgs) {
+export function lunarNowQueryOptions({
+  lat,
+  lon,
+  tz,
+  baseUrl,
+}: LunarQueryArgs) {
   return {
     queryKey: ["lunar-now-compare", lat, lon, tz],
     queryFn: async () => {
@@ -134,8 +143,17 @@ export function lunarNowQueryOptions({ lat, lon, tz, baseUrl }: LunarQueryArgs) 
         internal: {
           altDeg: py.alt_deg,
           azDeg: py.az_deg,
-          illumPct: Math.round(py.illum_frac * 100),
+          illumPct: Math.round(py.moon.illumination * 100),
+          illumination: py.moon.illumination,
+          waxing: py.moon.waxing,
+          phaseAngleDeg: py.moon.phase_angle_deg,
+          brightLimbAngleDeg: py.moon.bright_limb_angle_deg,
           phaseName: py.phase_name,
+          // Convert position angle to an SVG rotation (0° = bright on right).
+          tiltDeg:
+            py.bright_limb_angle_deg !== undefined
+              ? py.bright_limb_angle_deg - 270
+              : undefined,
         },
         external: {
           altDeg: sc.altDeg,

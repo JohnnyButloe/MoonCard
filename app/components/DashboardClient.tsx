@@ -3,7 +3,6 @@
 import MoonNowCard from "./MoonCardNow";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
-import TwilightPhaseBar from "./TwilightPhaseBar";
 import LocationSwitcher from "./LocationSwitcher";
 import {
   LocationProvider,
@@ -50,11 +49,6 @@ function DashboardContent() {
             />
           </section>
           <section className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4">
-            <TwilightPhaseBar
-              lat={active.latitude}
-              lon={active.longitude}
-              tz={tz}
-            />
             <MoonAltitudeGraph
               lat={active.latitude}
               lon={active.longitude}
