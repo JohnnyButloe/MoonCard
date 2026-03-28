@@ -72,8 +72,10 @@ export async function GET(req: NextRequest) {
       );
     }
     return NextResponse.json(JSON.parse(text), { headers: cacheHeaders() });
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Date.now() - start;
+    const message = err instanceof Error ? err.message : String(err);
+    const name = err instanceof Error ? err.name : "";
     console.error(
       JSON.stringify({
         level: "error",
@@ -81,12 +83,11 @@ export async function GET(req: NextRequest) {
         msg: "upstream-exception",
         latencyMs,
         url: upstream.toString(),
-        error: String(err?.message ?? err),
+        error: message,
       }),
     );
     const status =
-      String(err?.name ?? "").includes("AbortError") ||
-      String(err?.message ?? "").includes("abort")
+      name.includes("AbortError") || message.includes("abort")
         ? 504
         : 502;
     return NextResponse.json(

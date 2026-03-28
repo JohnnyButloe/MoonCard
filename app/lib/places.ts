@@ -1,5 +1,4 @@
-// app/lib/places.ts
-"use client";
+import { US_CITIES } from "./usCities";
 
 export type PlaceResult = {
   id: string;
@@ -17,12 +16,17 @@ export const DEFAULT_PLACE: PlaceResult = {
   timezone: "America/New_York",
 };
 
-export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-  const q = query.trim();
-  if (!q) return [];
-
-  if (q.toLowerCase() === "new york") return [DEFAULT_PLACE];
-
-  console.warn("searchPlaces is not implemented; returning default []");
-  return [];
-}
+export const FEATURED_PLACES: PlaceResult[] = [
+  US_CITIES[0],
+  US_CITIES[1],
+  US_CITIES[2],
+  US_CITIES[12],
+  US_CITIES[13],
+  US_CITIES[14],
+].map((city) => ({
+  id: city.id,
+  label: city.label,
+  latitude: city.latitude,
+  longitude: city.longitude,
+  timezone: city.tz,
+}));

@@ -13,8 +13,12 @@ export function sunEventsQueryOptions({
   tz: string;
   baseUrl?: string;
 }) {
+  const enabled =
+    Number.isFinite(lat) && Number.isFinite(lon) && typeof tz === "string" && tz.length > 0;
+
   return {
     queryKey: ["sun", lat, lon, tz],
+    enabled,
     queryFn: async () => {
       const now = new Date();
       const dateIso = formatInTimeZone(now, tz, "yyyy-MM-dd");

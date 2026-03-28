@@ -127,8 +127,12 @@ export function lunarNowQueryOptions({
   tz,
   baseUrl,
 }: LunarQueryArgs) {
+  const enabled =
+    Number.isFinite(lat) && Number.isFinite(lon) && typeof tz === "string" && tz.length > 0;
+
   return {
     queryKey: ["lunar-now-compare", lat, lon, tz],
+    enabled,
     queryFn: async () => {
       const now = new Date();
       const whenISO = formatInTimeZone(now, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
@@ -159,7 +163,7 @@ export function lunarNowQueryOptions({
           altDeg: sc.altDeg,
           azDeg: sc.azDeg,
           illumPct: Math.round(sc.frac * 100),
-          phaseName: py.phase_name,
+          phaseName: phaseNameFromDeg(sc.phase * 360),
         },
       };
     },
@@ -175,8 +179,12 @@ export function moonTodayQueryOptions({
   tz,
   baseUrl,
 }: LunarQueryArgs) {
+  const enabled =
+    Number.isFinite(lat) && Number.isFinite(lon) && typeof tz === "string" && tz.length > 0;
+
   return {
     queryKey: ["moon-today-compare", lat, lon, tz],
+    enabled,
     queryFn: async () => {
       const now = new Date();
 
@@ -185,7 +193,7 @@ export function moonTodayQueryOptions({
       const tomorrowLocal = shiftLocalDate(now, tz, +1);
 
       const [pyToday, extToday] = await Promise.all([
-        fetchMoonEvents(lat, lon, todayLocal, baseUrl),
+        fetchMoonEvents(lat, lon, todayLocal, tz, baseUrl),
         fetchMoonToday({ lat, lon, tz, date: todayLocal, baseUrl }),
       ]);
 
@@ -203,10 +211,10 @@ export function moonTodayQueryOptions({
       const [pyActive, pyPrev, extActive, extPrev] = await Promise.all([
         activeDate === todayLocal
           ? Promise.resolve(pyToday)
-          : fetchMoonEvents(lat, lon, activeDate, baseUrl),
+          : fetchMoonEvents(lat, lon, activeDate, tz, baseUrl),
         previousDate === todayLocal
           ? Promise.resolve(pyToday)
-          : fetchMoonEvents(lat, lon, previousDate, baseUrl),
+          : fetchMoonEvents(lat, lon, previousDate, tz, baseUrl),
 
         activeDate === todayLocal
           ? Promise.resolve(extToday)
@@ -223,7 +231,7 @@ export function moonTodayQueryOptions({
       let pyNextCache: Awaited<ReturnType<typeof fetchMoonEvents>> | undefined;
       const getPyNext = async () => {
         if (!pyNextCache)
-          pyNextCache = await fetchMoonEvents(lat, lon, nextLocal, baseUrl);
+          pyNextCache = await fetchMoonEvents(lat, lon, nextLocal, tz, baseUrl);
         return pyNextCache;
       };
 
@@ -344,9 +352,9 @@ export function moonTodayQueryOptions({
         internal: {
           rise: internalRise,
           set: internalSet,
-          highMoon: pyActive.highMoon ?? fallbackInternalHigh,
-          lowMoon: pyActive.lowMoon,
-          phaseName: pyActive.phaseName,
+          highMoon: pyActive.high_moon ?? fallbackInternalHigh,
+          lowMoon: pyActive.low_moon,
+          phaseName: pyActive.phase_name,
           prevRise: pyPrev.rise,
           prevSet: pyPrev.set,
         },
@@ -356,7 +364,9 @@ export function moonTodayQueryOptions({
           highMoon: extActive.highMoon ?? fallbackExternalHigh,
           lowMoon: extActive.lowMoon,
           phaseName:
-            extActive.phaseName ?? phaseNameFromDeg(extActive.phase ?? 0),
+            typeof extActive.phaseDeg === "number"
+              ? phaseNameFromDeg(extActive.phaseDeg)
+              : undefined,
           prevRise: extPrev.rise,
           prevSet: extPrev.set,
         },

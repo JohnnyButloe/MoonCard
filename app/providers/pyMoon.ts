@@ -161,6 +161,7 @@ export async function fetchMoonEvents(
   lat: number,
   lon: number,
   dateIso: string,
+  tz: string,
   baseUrl?: string,
 ): Promise<MoonEvents> {
   const origin = resolveBaseUrl(baseUrl);
@@ -170,6 +171,7 @@ export async function fetchMoonEvents(
   url.searchParams.set("date_iso", dateIso);
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lon));
+  url.searchParams.set("tz", tz);
   const res = await fetch(url.toString(), { cache: "no-store" });
   if (!res.ok) throw new Error("py-moon-events-failed");
 

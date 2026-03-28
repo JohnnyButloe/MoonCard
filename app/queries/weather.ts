@@ -10,8 +10,11 @@ export function weatherNowQueryOptions({
   lon: number;
   baseUrl?: string;
 }) {
+  const enabled = Number.isFinite(lat) && Number.isFinite(lon);
+
   return {
     queryKey: ["weather-now", lat, lon],
+    enabled,
     queryFn: async () => fetchWeatherNow(lat, lon, baseUrl),
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,

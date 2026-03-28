@@ -49,12 +49,16 @@ def api_moon_events(
     date_iso: str = Query(..., description="Local calendar date (YYYY-MM-DD)"),
     lat: float = Query(..., ge=-90.0, le=90.0),
     lon: float = Query(..., ge=-180.0, le=180.0),
+    tz: Optional[str] = Query(
+        None,
+        description="IANA timezone name (e.g. America/New_York)",
+    ),
     elev: float = Query(0.0, description="Observer elevation in metres (currently unused)"),
 ):
     """Return Moon events for the given *local* calendar date.
 
     The frontend sends `date_iso` as the user's local date (YYYY-MM-DD). We
-    treat it as a local civil day tied to the observer's longitude and compute
+    treat it as a local civil day in the requested timezone and compute
     the first rise, set, upper transit (high_moon) and lower transit
     (low_moon) that occur between local midnight and the following midnight.
     """
@@ -68,6 +72,7 @@ def api_moon_events(
         lat_deg=lat,
         lon_deg=lon,
         date_iso=date_iso,
+        tz_name=tz,
     )
 
     return {

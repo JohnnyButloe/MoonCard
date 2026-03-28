@@ -8,6 +8,7 @@ import { useLunarNow, useMoonToday } from "../hooks/useLunar";
 import { useSunToday } from "../hooks/useSun";
 import { useTwilight } from "../hooks/useTwilight";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import MoonPhaseCalendar from "./MoonPhaseCalendar";
 
 // SVG coordinates space (matched to 4:1 container aspect to avoid side letterboxing)
 const VIEW_W = 160;
@@ -161,13 +162,18 @@ function yOnCurve(t: number) {
   return HORIZON_Y - AMP * Math.sin(2 * Math.PI * t - Math.PI / 2);
 }
 
+function formatPathNumber(value: number, decimals = 4) {
+  const rounded = Number(value.toFixed(decimals));
+  return Number.isFinite(rounded) ? rounded.toString() : "0";
+}
+
 function buildCurvePath(samples = 200) {
   let d = "";
   for (let i = 0; i <= samples; i += 1) {
     const t = i / samples;
     const x = t * VIEW_W;
     const y = yOnCurve(t);
-    d += `${i === 0 ? "M" : "L"} ${x},${y} `;
+    d += `${i === 0 ? "M" : "L"} ${formatPathNumber(x)},${formatPathNumber(y)} `;
   }
   return d.trim();
 }
@@ -383,185 +389,196 @@ export default function MoonAltitudeGraph({
   if (!ready) return null;
 
   return (
-    <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
-          Moon/Sun altitude
+    <div className="flex h-full w-full flex-col rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
+      <div className="shrink-0">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
+            Moon/Sun altitude
+          </div>
+          <div className="text-[11px] text-sky-100/70">
+            Updated {lastUpdatedLabel}
+            {isUpdating ? " · updating" : ""}
+          </div>
         </div>
-        <div className="text-[11px] text-sky-100/70">
-          Updated {lastUpdatedLabel}
-          {isUpdating ? " · updating" : ""}
-        </div>
-      </div>
 
-      <div className="w-full overflow-hidden rounded-xl aspect-[4/1] bg-black/60">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          preserveAspectRatio="none"
-          className="block h-full w-full"
-          style={{ isolation: "isolate" }}
-        >
-          <defs>
-            <clipPath id={plotClipId}>
-              <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
-            </clipPath>
+        <div className="aspect-[4/1] w-full overflow-hidden rounded-xl bg-black/60">
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            preserveAspectRatio="none"
+            className="block h-full w-full"
+            style={{ isolation: "isolate" }}
+          >
+            <defs>
+              <clipPath id={plotClipId}>
+                <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
+              </clipPath>
 
-            <clipPath id={aboveHorizonClipId}>
-              <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
-            </clipPath>
+              <clipPath id={aboveHorizonClipId}>
+                <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
+              </clipPath>
 
-            <filter
-              id={auraBlurId}
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
-              <feGaussianBlur stdDeviation="10" />
-            </filter>
+              <filter
+                id={auraBlurId}
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
+                <feGaussianBlur stdDeviation="10" />
+              </filter>
 
-            {skyStripes.map((stripe, idx) => {
-              const gradId = `${idPrefix}-sky-${idx}`;
-              const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
-              return (
-                <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
-                  <stop offset="65%" stopColor={rgbToCss(mid, 1)} />
-                  <stop offset="100%" stopColor={rgbToCss(stripe.horizon, 1)} />
-                </linearGradient>
-              );
-            })}
-          </defs>
+              {skyStripes.map((stripe, idx) => {
+                const gradId = `${idPrefix}-sky-${idx}`;
+                const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
+                return (
+                  <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
+                    <stop offset="65%" stopColor={rgbToCss(mid, 1)} />
+                    <stop offset="100%" stopColor={rgbToCss(stripe.horizon, 1)} />
+                  </linearGradient>
+                );
+              })}
+            </defs>
 
-          <g clipPath={`url(#${plotClipId})`}>
-            {/* 1) Sky background */}
-            <g id="bg">
-              {skyStripes.map((stripe, idx) => (
+            <g clipPath={`url(#${plotClipId})`}>
+              {/* 1) Sky background */}
+              <g id="bg">
+                {skyStripes.map((stripe, idx) => (
+                  <rect
+                    key={`sky-col-${idx}`}
+                    x={stripe.x}
+                    y="0"
+                    width={stripe.width}
+                    height={HORIZON_Y}
+                    fill={`url(#${idPrefix}-sky-${idx})`}
+                  />
+                ))}
                 <rect
-                  key={`sky-col-${idx}`}
-                  x={stripe.x}
+                  x="0"
                   y="0"
-                  width={stripe.width}
+                  width={VIEW_W}
                   height={HORIZON_Y}
-                  fill={`url(#${idPrefix}-sky-${idx})`}
+                  fill="rgba(0,0,0,0.10)"
                 />
-              ))}
-              <rect
-                x="0"
-                y="0"
-                width={VIEW_W}
-                height={HORIZON_Y}
-                fill="rgba(0,0,0,0.10)"
-              />
-              <rect
-                x="0"
-                y={HORIZON_Y}
-                width={VIEW_W}
-                height={VIEW_H - HORIZON_Y}
-                fill="#000"
-              />
-            </g>
+                <rect
+                  x="0"
+                  y={HORIZON_Y}
+                  width={VIEW_W}
+                  height={VIEW_H - HORIZON_Y}
+                  fill="#000"
+                />
+              </g>
 
-            {/* 2) Altitude curves/horizon */}
-            <g id="lines">
-              <line
-                x1="0"
-                y1={HORIZON_Y}
-                x2={VIEW_W}
-                y2={HORIZON_Y}
-                stroke="#6b7280"
-                strokeWidth="0.6"
-                vectorEffect="non-scaling-stroke"
-              />
-              <path
-                d={CURVE_PATH}
-                stroke="#9ca3af"
-                strokeWidth="1.2"
-                vectorEffect="non-scaling-stroke"
-                fill="none"
-              />
-            </g>
+              {/* 2) Altitude curves/horizon */}
+              <g id="lines">
+                <line
+                  x1="0"
+                  y1={HORIZON_Y}
+                  x2={VIEW_W}
+                  y2={HORIZON_Y}
+                  stroke="#6b7280"
+                  strokeWidth="0.6"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={CURVE_PATH}
+                  stroke="#9ca3af"
+                  strokeWidth="1.2"
+                  vectorEffect="non-scaling-stroke"
+                  fill="none"
+                />
+              </g>
 
-            {/* Optional contrast pockets under aura for daytime separation */}
-            <g id="glow-contrast" clipPath={`url(#${aboveHorizonClipId})`} filter={`url(#${auraBlurId})`}>
-              <circle cx={dotX} cy={dotY} r="12" fill="#020617" opacity="0.16" />
-              {sunDataReady ? (
-                <circle cx={sunDotX} cy={sunDotY} r="10" fill="#020617" opacity="0.12" />
-              ) : null}
-            </g>
+              {/* Optional contrast pockets under aura for daytime separation */}
+              <g
+                id="glow-contrast"
+                clipPath={`url(#${aboveHorizonClipId})`}
+                filter={`url(#${auraBlurId})`}
+              >
+                <circle cx={dotX} cy={dotY} r="12" fill="#020617" opacity="0.16" />
+                {sunDataReady ? (
+                  <circle cx={sunDotX} cy={sunDotY} r="10" fill="#020617" opacity="0.12" />
+                ) : null}
+              </g>
 
-            {/* 3) Glow pass */}
-            <g
-              id="glow"
-              clipPath={`url(#${aboveHorizonClipId})`}
-              style={{ mixBlendMode: "screen" }}
-              filter={`url(#${auraBlurId})`}
-            >
-              <circle cx={dotX} cy={dotY} r="16" fill="rgba(180,210,255,0.38)" />
-              {sunDataReady ? (
-                <circle cx={sunDotX} cy={sunDotY} r="14" fill="rgba(255,220,120,0.46)" />
-              ) : null}
-            </g>
+              {/* 3) Glow pass */}
+              <g
+                id="glow"
+                clipPath={`url(#${aboveHorizonClipId})`}
+                style={{ mixBlendMode: "screen" }}
+                filter={`url(#${auraBlurId})`}
+              >
+                <circle cx={dotX} cy={dotY} r="16" fill="rgba(180,210,255,0.38)" />
+                {sunDataReady ? (
+                  <circle cx={sunDotX} cy={sunDotY} r="14" fill="rgba(255,220,120,0.46)" />
+                ) : null}
+              </g>
 
-            {/* 4) Crisp markers on top */}
-            <g id="markers">
-              <MoonPhaseCircle
-                mode="g"
-                cx={dotX}
-                cy={dotY}
-                r={2.25}
-                size={16}
-                illuminationFrac={moonMarker?.illumination}
-                waxing={moonMarker?.waxing}
-                brightLimbAngleDeg={moonMarker?.brightLimbAngleDeg}
-              />
-              {sunDataReady ? (
-                <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
-              ) : null}
+              {/* 4) Crisp markers on top */}
+              <g id="markers">
+                <MoonPhaseCircle
+                  mode="g"
+                  cx={dotX}
+                  cy={dotY}
+                  r={2.25}
+                  size={16}
+                  illuminationFrac={moonMarker?.illumination}
+                  waxing={moonMarker?.waxing}
+                  phaseAngleDeg={moonMarker?.phaseAngleDeg}
+                  brightLimbAngleDeg={moonMarker?.brightLimbAngleDeg}
+                />
+                {sunDataReady ? (
+                  <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
+                ) : null}
+              </g>
             </g>
-          </g>
-        </svg>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-sky-100/70">
-        <div className="inline-flex items-center gap-2">
-          <span
-            className="h-2 w-2 rounded-full ring-1 ring-white/20"
-            style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
-          />
-          Twilight phase: <span className="font-semibold">{twilightLabel}</span>
+          </svg>
         </div>
-        {twilightQ.error ? (
-          <div className="text-sky-100/55">Twilight unavailable</div>
-        ) : null}
-      </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-sky-100/55">
-        {TWILIGHT_LEGEND_ORDER.map((phase) => (
-          <span key={phase} className="inline-flex items-center gap-1.5">
+        <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-sky-100/70">
+          <div className="inline-flex items-center gap-2">
             <span
-              className="h-2 w-2 rounded-sm ring-1 ring-white/15"
-              style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
+              className="h-2 w-2 rounded-full ring-1 ring-white/20"
+              style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
             />
-            <span className="inline-flex flex-col leading-tight">
-              <span>{TWILIGHT_LABEL[phase]}</span>
-              <span className="text-[10px] normal-case tracking-normal text-sky-100/45">
-                {nextPhaseStartLabel[phase]}
+            Twilight phase: <span className="font-semibold">{twilightLabel}</span>
+          </div>
+          {twilightQ.error ? (
+            <div className="text-sky-100/55">Twilight unavailable</div>
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-sky-100/55">
+          {TWILIGHT_LEGEND_ORDER.map((phase) => (
+            <span key={phase} className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2 w-2 rounded-sm ring-1 ring-white/15"
+                style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
+              />
+              <span className="inline-flex flex-col leading-tight">
+                <span>{TWILIGHT_LABEL[phase]}</span>
+                <span className="text-[10px] normal-case tracking-normal text-sky-100/45">
+                  {nextPhaseStartLabel[phase]}
+                </span>
               </span>
             </span>
+          ))}
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-sky-100/65">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
+            Sunrise <span className="font-semibold">{sunriseLegendLabel}</span>
           </span>
-        ))}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
+            Sunset <span className="font-semibold">{sunsetLegendLabel}</span>
+          </span>
+        </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-sky-100/65">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
-          Sunrise <span className="font-semibold">{sunriseLegendLabel}</span>
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
-          Sunset <span className="font-semibold">{sunsetLegendLabel}</span>
-        </span>
+      <div className="mt-4 flex min-h-0 flex-1 border-t border-white/10 pt-4">
+        <MoonPhaseCalendar tz={tz} />
       </div>
     </div>
   );

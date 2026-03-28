@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { getBrowserLocation, formatGeoError } from "../lib/location";
 import { reverseGeocode } from "../lib/reverseGeocode";
 
@@ -15,6 +22,14 @@ export type CachedLocation = {
   source: LocationSource;
 };
 
+export type StoredLocation = {
+  id?: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  tz?: string;
+};
+
 type LocationContextValue = {
   active: CachedLocation;
   activeId: string;
@@ -23,10 +38,12 @@ type LocationContextValue = {
   saved: CachedLocation[];
   tz: string;
   isLocating: boolean;
+  hasCompletedOnboarding: boolean;
   setActiveById: (id: string) => void;
   setHomeFromCurrent: () => void;
   saveCurrentToList: () => void;
   addSavedLocation: (loc: StoredLocation) => void;
+  selectLocation: (loc: StoredLocation) => void;
   removeSavedLocation: (id: string) => void;
   renameSavedLocation: (id: string, label: string) => void;
 };
@@ -37,15 +54,8 @@ const STORAGE_LAST_LOCATION = "mooncard:lastLocation";
 const STORAGE_HOME_LOCATION = "mooncard:homeLocation";
 const STORAGE_SAVED_LOCATIONS = "mooncard:savedLocations";
 const STORAGE_ACTIVE_ID = "mooncard:activeLocationId";
+const STORAGE_HAS_SELECTED_LOCATION = "mooncard:hasSelectedLocation";
 const MAX_SAVED = 8;
-
-type StoredLocation = {
-  id?: string;
-  label: string;
-  latitude: number;
-  longitude: number;
-  tz?: string;
-};
 
 function readStoredLocation(key: string): StoredLocation | null {
   try {
@@ -134,10 +144,26 @@ export function LocationProvider({
   const [saved, setSaved] = useState<CachedLocation[]>([]);
   const [tz, setTz] = useState<string>(fallback.tz ?? "UTC");
   const [isLocating, setIsLocating] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
+
+  const commitActiveSelection = useCallback(
+    (next: CachedLocation, id: string) => {
+      activeIdRef.current = id;
+      setActive(next);
+      setActiveId(id);
+      setTz(next.tz ?? tz);
+      try {
+        localStorage.setItem(STORAGE_ACTIVE_ID, id);
+      } catch {
+        // ignore
+      }
+    },
+    [tz],
+  );
 
   const setActiveById = (id: string) => {
     let next: CachedLocation | null = null;
@@ -145,14 +171,7 @@ export function LocationProvider({
     else if (id === "home") next = home;
     else next = saved.find((loc) => loc.id === id) ?? null;
     if (!next) return;
-    setActive(next);
-    setActiveId(id);
-    setTz(next.tz ?? tz);
-    try {
-      localStorage.setItem(STORAGE_ACTIVE_ID, id);
-    } catch {
-      // ignore
-    }
+    commitActiveSelection(next, id);
   };
 
   const setHomeFromCurrent = () => {
@@ -200,14 +219,7 @@ export function LocationProvider({
     const nextActive = toCachedLocation("saved", entry, tz);
     setSaved(nextSaved);
     writeSavedLocations(nextStored);
-    setActive(nextActive);
-    setActiveId(nextActive.id);
-    setTz(nextActive.tz ?? tz);
-    try {
-      localStorage.setItem(STORAGE_ACTIVE_ID, nextActive.id);
-    } catch {
-      // ignore
-    }
+    commitActiveSelection(nextActive, nextActive.id);
   };
 
   const addSavedLocation = (loc: StoredLocation) => {
@@ -217,14 +229,7 @@ export function LocationProvider({
         Math.abs(item.longitude - loc.longitude) < 0.0001,
     );
     if (match) {
-      setActive(match);
-      setActiveId(match.id);
-      setTz(match.tz ?? tz);
-      try {
-        localStorage.setItem(STORAGE_ACTIVE_ID, match.id);
-      } catch {
-        // ignore
-      }
+      commitActiveSelection(match, match.id);
       return;
     }
     const entry: StoredLocation = {
@@ -244,11 +249,14 @@ export function LocationProvider({
     const nextActive = toCachedLocation("saved", entry, tz);
     setSaved(nextSaved);
     writeSavedLocations(nextStored);
-    setActive(nextActive);
-    setActiveId(nextActive.id);
-    setTz(nextActive.tz ?? tz);
+    commitActiveSelection(nextActive, nextActive.id);
+  };
+
+  const selectLocation = (loc: StoredLocation) => {
+    addSavedLocation(loc);
+    setHasCompletedOnboarding(true);
     try {
-      localStorage.setItem(STORAGE_ACTIVE_ID, nextActive.id);
+      localStorage.setItem(STORAGE_HAS_SELECTED_LOCATION, "true");
     } catch {
       // ignore
     }
@@ -261,14 +269,7 @@ export function LocationProvider({
 
     if (activeId === id) {
       const fallbackNext = current ?? home ?? nextSaved[0] ?? fallback;
-      setActive(fallbackNext);
-      setActiveId(fallbackNext.id);
-      setTz(fallbackNext.tz ?? tz);
-      try {
-        localStorage.setItem(STORAGE_ACTIVE_ID, fallbackNext.id);
-      } catch {
-        // ignore
-      }
+      commitActiveSelection(fallbackNext, fallbackNext.id);
     }
   };
 
@@ -311,36 +312,67 @@ export function LocationProvider({
         : null;
       setCurrent(currentLoc);
 
-      let initialActive: CachedLocation = fallback;
+      let storedActiveId: string | null = null;
       try {
-        const storedActiveId = localStorage.getItem(STORAGE_ACTIVE_ID);
+        storedActiveId = localStorage.getItem(STORAGE_ACTIVE_ID);
+      } catch {
+        storedActiveId = null;
+      }
+
+      let onboardingComplete = false;
+      try {
+        onboardingComplete =
+          localStorage.getItem(STORAGE_HAS_SELECTED_LOCATION) === "true";
+      } catch {
+        onboardingComplete = false;
+      }
+
+      if (!onboardingComplete) {
+        onboardingComplete = Boolean(
+          homeLoc ||
+            storedSaved.length > 0 ||
+            (storedActiveId === "current" && currentLoc),
+        );
+      }
+      setHasCompletedOnboarding(onboardingComplete);
+      if (onboardingComplete) {
+        try {
+          localStorage.setItem(STORAGE_HAS_SELECTED_LOCATION, "true");
+        } catch {
+          // ignore
+        }
+      }
+
+      let initialActive: CachedLocation = fallback;
+      let initialActiveId = fallback.id;
+      try {
         if (storedActiveId === "current" && currentLoc) {
           initialActive = currentLoc;
-          setActiveId("current");
+          initialActiveId = "current";
         } else if (storedActiveId === "home" && homeLoc) {
           initialActive = homeLoc;
-          setActiveId("home");
+          initialActiveId = "home";
         } else {
           const savedMatch = storedSaved.find(
             (loc) => loc.id === storedActiveId,
           );
           if (savedMatch) {
             initialActive = savedMatch;
-            setActiveId(savedMatch.id);
+            initialActiveId = savedMatch.id;
           } else if (currentLoc) {
             initialActive = currentLoc;
-            setActiveId("current");
+            initialActiveId = "current";
           } else if (homeLoc) {
             initialActive = homeLoc;
-            setActiveId("home");
-          } else {
-            setActiveId(fallback.id);
+            initialActiveId = "home";
           }
         }
       } catch {
         // ignore
       }
+      activeIdRef.current = initialActiveId;
       setActive(initialActive);
+      setActiveId(initialActiveId);
       setTz(initialActive.tz ?? tzClient);
 
       setIsLocating(true);
@@ -372,13 +404,8 @@ export function LocationProvider({
 
       setCurrent(next);
       writeStoredLocation(STORAGE_LAST_LOCATION, nextStored);
-      if (
-        activeIdRef.current === "current" ||
-        activeIdRef.current === fallback.id
-      ) {
-        setActive(next);
-        setActiveId("current");
-        setTz(next.tz ?? tzClient);
+      if (activeIdRef.current === "current") {
+        commitActiveSelection(next, "current");
       }
 
       const rg = await reverseGeocode(latitude, longitude, {
@@ -407,7 +434,7 @@ export function LocationProvider({
         }
       }
     })();
-  }, [fallback.id, fallback.tz]);
+  }, [commitActiveSelection, fallback]);
 
   return (
     <LocationContext.Provider
@@ -419,10 +446,12 @@ export function LocationProvider({
         saved,
         tz,
         isLocating,
+        hasCompletedOnboarding,
         setActiveById,
         setHomeFromCurrent,
         saveCurrentToList,
         addSavedLocation,
+        selectLocation,
         removeSavedLocation,
         renameSavedLocation,
       }}

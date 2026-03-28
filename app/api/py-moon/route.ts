@@ -15,6 +15,7 @@ const Q = z.object({
   lon: z.coerce.number().min(-180).max(180),
   datetime_iso: z.string().datetime({ offset: true }).optional(),
   date_iso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  tz: z.string().min(1).max(100).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     lon: searchParams.get("lon"),
     datetime_iso: searchParams.get("datetime_iso") ?? undefined,
     date_iso: searchParams.get("date_iso") ?? undefined,
+    tz: searchParams.get("tz") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -33,7 +35,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { mode, lat, lon, datetime_iso, date_iso } = parsed.data;
+  const { mode, lat, lon, datetime_iso, date_iso, tz } = parsed.data;
   if (mode === "now" && !datetime_iso) {
     return NextResponse.json(
       { error: "missing datetime_iso" },
@@ -43,6 +45,12 @@ export async function GET(req: NextRequest) {
   if (mode === "events" && !date_iso) {
     return NextResponse.json(
       { error: "missing date_iso" },
+      { status: 400, headers: noStoreHeaders },
+    );
+  }
+  if (mode === "events" && !tz) {
+    return NextResponse.json(
+      { error: "missing tz" },
       { status: 400, headers: noStoreHeaders },
     );
   }
@@ -61,6 +69,7 @@ export async function GET(req: NextRequest) {
   url.searchParams.set("lon", String(lon));
   if (datetime_iso) url.searchParams.set("datetime_iso", datetime_iso);
   if (date_iso) url.searchParams.set("date_iso", date_iso);
+  if (tz) url.searchParams.set("tz", tz);
 
   const start = Date.now();
   try {
@@ -90,8 +99,10 @@ export async function GET(req: NextRequest) {
     }
     const data = JSON.parse(text);
     return NextResponse.json(data, { headers: cacheHeaders() });
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Date.now() - start;
+    const errName = err instanceof Error ? err.name : "";
+    const errMessage = err instanceof Error ? err.message : String(err);
     console.error(
       JSON.stringify({
         level: "error",
@@ -99,12 +110,11 @@ export async function GET(req: NextRequest) {
         msg: "upstream-exception",
         latencyMs,
         url: url.toString(),
-        error: String(err?.message ?? err),
+        error: errMessage,
       }),
     );
     const status =
-      String(err?.name ?? "").includes("AbortError") ||
-      String(err?.message ?? "").includes("abort")
+      errName.includes("AbortError") || errMessage.includes("abort")
         ? 504
         : 502;
     return NextResponse.json(

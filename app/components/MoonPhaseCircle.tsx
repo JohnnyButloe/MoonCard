@@ -1,11 +1,10 @@
 "use client";
 
-import { useId } from "react";
-
 type MoonPhaseCircleProps = {
   illuminationPct?: number; // 0-100
   illuminationFrac?: number; // 0-1
   waxing?: boolean;
+  phaseAngleDeg?: number; // 0=new, 180=full
   tiltDeg?: number;
   brightLimbAngleDeg?: number;
   mode?: "svg" | "g";
@@ -19,33 +18,58 @@ type MoonPhaseCircleProps = {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-function litFractionForUnitOffset(unitOffset: number): number {
-  const x = clamp01(unitOffset);
-  const overlapFrac =
-    (2 * Math.acos(x) - 2 * x * Math.sqrt(Math.max(0, 1 - x * x))) / Math.PI;
-  return 1 - overlapFrac;
+function normalizeDeg(deg: number): number {
+  return ((deg % 360) + 360) % 360;
 }
 
-function unitOffsetForLitFraction(litFrac: number): number {
-  const target = clamp01(litFrac);
-  if (target <= 0) return 0;
-  if (target >= 1) return 1;
+function formatPathNumber(value: number, decimals = 4): string {
+  const rounded = Number(value.toFixed(decimals));
+  return Number.isFinite(rounded) ? rounded.toString() : "0";
+}
 
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 28; i += 1) {
-    const mid = (lo + hi) / 2;
-    const lit = litFractionForUnitOffset(mid);
-    if (lit < target) lo = mid;
-    else hi = mid;
+function buildLitPath(
+  cx: number,
+  cy: number,
+  r: number,
+  litFrac: number,
+  waxing: boolean,
+): string {
+  const f = clamp01(litFrac);
+  if (f <= 1e-4 || r <= 0) return "";
+
+  const topY = cy - r;
+  const bottomY = cy + r;
+
+  if (f >= 1 - 1e-4) {
+    return [
+      `M ${formatPathNumber(cx)},${formatPathNumber(topY)}`,
+      `A ${formatPathNumber(r)},${formatPathNumber(r)} 0 1 1 ${formatPathNumber(cx)},${formatPathNumber(bottomY)}`,
+      `A ${formatPathNumber(r)},${formatPathNumber(r)} 0 1 1 ${formatPathNumber(cx)},${formatPathNumber(topY)}`,
+      "Z",
+    ].join(" ");
   }
-  return (lo + hi) / 2;
+
+  // Signed terminator position model:
+  // x_t(y) = coeff * sqrt(r^2 - (y-cy)^2), where coeff in [-1, 1].
+  // coeff = (1 - 2f) for waxing, mirrored for waning.
+  const coeff = (waxing ? 1 : -1) * (1 - 2 * f);
+  const terminatorRx = Math.max(r * 1e-4, Math.abs(coeff) * r);
+  const litSideSweepDown = waxing ? 1 : 0; // top->bottom along lit limb
+  const terminatorSweepUp = coeff >= 0 ? 0 : 1; // bottom->top along terminator side
+
+  return [
+    `M ${formatPathNumber(cx)},${formatPathNumber(topY)}`,
+    `A ${formatPathNumber(r)},${formatPathNumber(r)} 0 0 ${litSideSweepDown} ${formatPathNumber(cx)},${formatPathNumber(bottomY)}`,
+    `A ${formatPathNumber(terminatorRx)},${formatPathNumber(r)} 0 0 ${terminatorSweepUp} ${formatPathNumber(cx)},${formatPathNumber(topY)}`,
+    "Z",
+  ].join(" ");
 }
 
 export function MoonPhaseCircle({
   illuminationPct,
   illuminationFrac,
   waxing = true,
+  phaseAngleDeg,
   tiltDeg,
   brightLimbAngleDeg,
   mode,
@@ -56,7 +80,6 @@ export function MoonPhaseCircle({
   r,
   className,
 }: MoonPhaseCircleProps) {
-  const id = useId().replace(/:/g, "-");
   const resolvedMode = mode ?? renderMode;
   const resolvedPct =
     illuminationPct ??
@@ -69,16 +92,21 @@ export function MoonPhaseCircle({
       ? brightLimbAngleDeg - 270
       : 0);
   const resolvedR = r ?? 46;
-  const strokeWidth = Math.max(0.75, resolvedR * 0.08);
+  const strokeWidth = Math.max(0.35, resolvedR * 0.08);
 
   const safeTilt = Number.isFinite(resolvedTiltDeg) ? resolvedTiltDeg : 0;
-  const hasValue = resolvedPct != null && !Number.isNaN(resolvedPct);
-  const pct = hasValue ? Math.max(0, Math.min(resolvedPct, 100)) : 0;
-  const litFrac = pct / 100;
-  const phaseOffset = 2 * resolvedR * unitOffsetForLitFraction(litFrac);
-  const shadowCx = waxing ? cx - phaseOffset : cx + phaseOffset;
+  const hasIllum = resolvedPct != null && !Number.isNaN(resolvedPct);
+  const hasAngle = phaseAngleDeg != null && Number.isFinite(phaseAngleDeg);
+  const litFracFromIllum = hasIllum ? clamp01((resolvedPct as number) / 100) : 0;
+  const normalizedPhaseDeg = hasAngle ? normalizeDeg(phaseAngleDeg as number) : 0;
+  const litFracFromAngle = hasAngle
+    ? clamp01((1 - Math.cos((normalizedPhaseDeg * Math.PI) / 180)) / 2)
+    : 0;
+  const litFrac = hasAngle ? litFracFromAngle : litFracFromIllum;
+  const resolvedWaxing = hasAngle ? normalizedPhaseDeg < 180 : waxing;
+  const litPath = buildLitPath(cx, cy, resolvedR, litFrac, resolvedWaxing);
 
-  if (resolvedPct == null || Number.isNaN(resolvedPct)) {
+  if (!hasIllum && !hasAngle) {
     if (resolvedMode === "g") {
       return (
         <g aria-hidden="true">
@@ -114,34 +142,11 @@ export function MoonPhaseCircle({
     );
   }
 
-  const maskId = `${id}-moon-lit-mask`;
-  const maskPad = resolvedR * 3;
   const glyph = (
     <g aria-hidden="true">
-      <defs>
-        <mask
-          id={maskId}
-          x={cx - maskPad}
-          y={cy - maskPad}
-          width={maskPad * 2}
-          height={maskPad * 2}
-          maskUnits="userSpaceOnUse"
-        >
-          <rect
-            x={cx - maskPad}
-            y={cy - maskPad}
-            width={maskPad * 2}
-            height={maskPad * 2}
-            fill="black"
-          />
-          <circle cx={cx} cy={cy} r={resolvedR} fill="white" />
-          <circle cx={shadowCx} cy={cy} r={resolvedR} fill="black" />
-        </mask>
-      </defs>
-
-      <circle cx={cx} cy={cy} r={resolvedR} fill="#000" />
+      <circle cx={cx} cy={cy} r={resolvedR} fill="#020617" />
       <g transform={`rotate(${safeTilt} ${cx} ${cy})`}>
-        <circle cx={cx} cy={cy} r={resolvedR} fill="#fff" mask={`url(#${maskId})`} />
+        {litPath ? <path d={litPath} fill="#f8fafc" /> : null}
       </g>
       <circle
         cx={cx}

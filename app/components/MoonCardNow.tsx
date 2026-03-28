@@ -3,6 +3,7 @@ import { useLunarNow, useMoonToday } from "../hooks/useLunar";
 import { useWeatherNow } from "../hooks/useWeather";
 import type { WeatherCondition } from "../providers/weather";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import { phaseNameFromDeg } from "../lib/lunarPhase";
 
 function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
@@ -33,36 +34,10 @@ function formatLocalDateTime(iso: string | undefined, tz: string): string {
   }).format(d);
 }
 
-function dayKeyInTimeZone(date: Date, tz: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: tz,
-  }).format(date);
-}
-
-function formatTimeOrDateTime(
-  iso: string | undefined,
-  tz: string,
-  referenceIso: string | undefined,
-): string {
+function formatTimeOrDateTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
   const eventDate = new Date(iso);
   if (!Number.isFinite(eventDate.getTime())) return "—";
-
-  const referenceDate = referenceIso ? new Date(referenceIso) : new Date();
-  const sameDay =
-    Number.isFinite(referenceDate.getTime()) &&
-    dayKeyInTimeZone(eventDate, tz) === dayKeyInTimeZone(referenceDate, tz);
-
-  if (sameDay) {
-    return new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: tz,
-    }).format(eventDate);
-  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -206,12 +181,12 @@ export default function MoonNowCard({
 
   // Render loading and error states.
   if (nowQ.isLoading || todayQ.isLoading || !nowQ.data || !todayQ.data) {
-    return <div className="p-6 rounded-2xl shadow">Loading…</div>;
+    return <div className="h-full w-full rounded-2xl p-6 shadow">Loading…</div>;
   }
 
   if (nowQ.error || todayQ.error) {
     return (
-      <div className="p-6 rounded-2xl shadow text-red-600">
+      <div className="h-full w-full rounded-2xl p-6 text-red-600 shadow">
         Failed to load lunar data.
       </div>
     );
@@ -224,8 +199,16 @@ export default function MoonNowCard({
   const moon = {
     illumination: now.internal.illumination,
     waxing: now.internal.waxing,
+    phase_angle_deg: now.internal.phaseAngleDeg,
     bright_limb_angle_deg: now.internal.brightLimbAngleDeg,
   };
+  const phaseLabel =
+    now.internal.phaseName ??
+    phaseNameFromDeg(now.internal.phaseAngleDeg) ??
+    now.external.phaseName ??
+    today.internal.phaseName ??
+    today.external.phaseName ??
+    "—";
   const lastUpdatedMs = Math.max(
     nowQ.dataUpdatedAt ?? 0,
     todayQ.dataUpdatedAt ?? 0,
@@ -248,19 +231,16 @@ export default function MoonNowCard({
       : "Loading weather";
 
   return (
-    <div className="grid gap-4 rounded-2xl bg-white/5 p-6 shadow-xl shadow-black/20 ring-1 ring-white/10 backdrop-blur">
+    <div className="grid h-full w-full gap-3 rounded-2xl bg-white/5 p-5 shadow-xl shadow-black/20 ring-1 ring-white/10 backdrop-blur">
       <header className="flex items-start justify-between gap-3">
-        <div>
+        <div className="space-y-0.5">
           <h2 className="text-xl font-semibold">Moon now</h2>
-          {/* Display the local timestamp from the now hook */}
-          <p className="text-sm opacity-70">
-            {formatLocalDateTime(now.whenISO, tz)}
-          </p>
-          <p className="text-xs opacity-60">
+          <p className="text-sm opacity-70">{formatLocalDateTime(now.whenISO, tz)}</p>
+          <p className="text-[11px] opacity-60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
           </p>
-          <p className="text-xs opacity-60">
+          <p className="text-[11px] opacity-60">
             Updated {lastUpdatedLabel}
             {isUpdating ? " · updating" : ""}
           </p>
@@ -280,123 +260,112 @@ export default function MoonNowCard({
       </header>
 
       {/* Current illumination, phase, altitude and azimuth */}
-      <section className="grid grid-cols-2 gap-4">
-        {/* Phase */}
-        <div>
-          <div className="text-4xl font-bold">
+      <section className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <div className="space-y-0.5">
+          <div className="text-3xl font-bold leading-none">
             {now.internal.illumPct}% / {now.external.illumPct}%
           </div>
-          <div className="opacity-70">illumination</div>
-          <div className="mt-1 text-xs opacity-60"></div>
+          <div className="text-sm opacity-70">illumination</div>
         </div>
-        <div>
-          <div className="flex items-center gap-4">
-            <div className="text-2xl font-semibold">
-              {today.internal.phaseName ?? today.external.phaseName ?? "-"}
-            </div>
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-3">
+            <div className="text-xl font-semibold leading-tight">{phaseLabel}</div>
             <MoonPhaseCircle
               illuminationFrac={moon.illumination}
               waxing={moon.waxing}
+              phaseAngleDeg={moon.phase_angle_deg}
               brightLimbAngleDeg={moon.bright_limb_angle_deg}
               size={40}
             />
           </div>
-          <div className="opacity-70">phase</div>
+          <div className="text-sm opacity-70">phase</div>
         </div>
-        {/* Altitude */}
+
         <div className="relative">
           <div className="group inline-flex flex-col">
-            <div className="text-2xl font-semibold">
+            <div className="text-xl font-semibold leading-tight">
               {now.internal.altDeg.toFixed(0)}° /{" "}
               {now.external.altDeg.toFixed(0)}°
             </div>
-            <div className="opacity-70">Altitude</div>
+            <div className="text-sm opacity-70">Altitude</div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
               Altitude relative to the horizon (0° = on the horizon, positive =
               above, negative = below).
             </div>
           </div>
-          <div className="mt-1 text-xs opacity-60"></div>
         </div>
 
-        {/* Azimuth */}
         <div className="relative">
           <div className="group inline-flex flex-col">
-            <div className="text-2xl font-semibold">
+            <div className="text-xl font-semibold leading-tight">
               {formatAzimuthWithDirection(now.internal.azDeg)} /{" "}
               {formatAzimuthWithDirection(now.external.azDeg)}
             </div>
-            <div className="opacity-70">Azimuth</div>
+            <div className="text-sm opacity-70">Azimuth</div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
               Azimuth is the Moon’s compass direction along the horizon,
               measured in degrees from true north (0°), moving eastward (90°),
               south (180°), and west (270°).
             </div>
           </div>
-          <div className="mt-1 text-xs opacity-60"></div>
         </div>
       </section>
 
-      {/* Daily events: rise, high, set, low */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-        {/* Moonrise */}
-        <div>
-          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
-            {formatTimeOrDateTime(today.internal.rise, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.rise, tz, now.whenISO)}
+      <section className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+        <div className="space-y-0.5">
+          <div className="text-base font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.rise, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.rise, tz)}
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
             Moonrise (East)
           </div>
-          <div className="mt-1 text-xs text-slate-300/70">
+          <div className="text-[11px] leading-snug text-slate-300/70">
             Previous moonrise:{" "}
-            {formatTimeOrDateTime(today.internal.prevRise, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.prevRise, tz, now.whenISO)}
+            {formatTimeOrDateTime(today.internal.prevRise, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.prevRise, tz)}
           </div>
-          <div className="mt-1 text-xs text-slate-300/60">
+          <div className="text-[11px] text-slate-300/60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
           </div>
         </div>
 
-        {/* High moon */}
-        <div>
-          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
-            {formatTimeOrDateTime(today.internal.highMoon, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.highMoon, tz, now.whenISO)}
+        <div className="space-y-0.5">
+          <div className="text-base font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.highMoon, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.highMoon, tz)}
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
             High moon
           </div>
         </div>
 
-        {/* Moonset */}
-        <div>
-          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
-            {formatTimeOrDateTime(today.internal.set, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.set, tz, now.whenISO)}
+        <div className="space-y-0.5">
+          <div className="text-base font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.set, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.set, tz)}
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
             Moonset (West)
           </div>
-          <div className="mt-1 text-xs text-slate-300/70">
+          <div className="text-[11px] leading-snug text-slate-300/70">
             Previous moonset:{" "}
-            {formatTimeOrDateTime(today.internal.prevSet, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.prevSet, tz, now.whenISO)}
+            {formatTimeOrDateTime(today.internal.prevSet, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.prevSet, tz)}
           </div>
-          <div className="mt-1 text-xs text-slate-300/60">
+          <div className="text-[11px] text-slate-300/60">
             <span className="font-semibold">internal:</span> python_service ·{" "}
             <span className="font-semibold">external:</span> SunCalc
           </div>
         </div>
 
-        {/* Low moon */}
-        <div>
-          <div className="mt-1 text-lg font-semibold leading-tight text-slate-100">
-            {formatTimeOrDateTime(today.internal.lowMoon, tz, now.whenISO)} /{" "}
-            {formatTimeOrDateTime(today.external.lowMoon, tz, now.whenISO)}
+        <div className="space-y-0.5">
+          <div className="text-base font-semibold leading-tight text-slate-100">
+            {formatTimeOrDateTime(today.internal.lowMoon, tz)} /{" "}
+            {formatTimeOrDateTime(today.external.lowMoon, tz)}
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-sky-100/60">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
             Low moon
           </div>
         </div>

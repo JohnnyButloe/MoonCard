@@ -1,17 +1,38 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import MoonNowCard from "./MoonCardNow";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
 import LocationSwitcher from "./LocationSwitcher";
+import LocationOnboarding from "./LocationOnboarding";
 import {
   LocationProvider,
   useLocation,
+  type StoredLocation,
   type CachedLocation,
 } from "../providers/LocationProvider";
 
-function DashboardContent() {
-  const { active, tz } = useLocation();
+function DashboardContent({
+  initialView,
+}: {
+  initialView: "landing" | "dashboard";
+}) {
+  const router = useRouter();
+  const { active, tz, hasCompletedOnboarding, selectLocation } = useLocation();
+
+  const handleSelectLocation = (location: StoredLocation) => {
+    selectLocation(location);
+    router.push("/dashboard");
+  };
+
+  if (initialView === "landing") {
+    return <LocationOnboarding onSelect={handleSelectLocation} />;
+  }
+
+  if (!hasCompletedOnboarding) {
+    return <LocationOnboarding onSelect={handleSelectLocation} />;
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -63,12 +84,14 @@ function DashboardContent() {
 
 export default function DashboardClient({
   fallback,
+  initialView = "dashboard",
 }: {
   fallback: CachedLocation;
+  initialView?: "landing" | "dashboard";
 }) {
   return (
     <LocationProvider fallback={fallback}>
-      <DashboardContent />
+      <DashboardContent initialView={initialView} />
     </LocationProvider>
   );
 }
