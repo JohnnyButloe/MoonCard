@@ -1,23 +1,14 @@
-// app/components/MoonGraph.tsx
 "use client";
 
-import { useId, useMemo } from "react";
-import SunCalc from "suncalc";
+import { useId } from "react";
 import { formatInTimeZone } from "date-fns-tz";
-import { useLunarNow, useMoonToday } from "../hooks/useLunar";
-import { useSunToday } from "../hooks/useSun";
-import { useTwilight } from "../hooks/useTwilight";
+import { useAstronomySummary } from "../hooks/useAstronomy";
+import type { AstronomySummary } from "../providers/pyAstronomy";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
-import MoonPhaseCalendar from "./MoonPhaseCalendar";
 
-// SVG coordinates space (matched to 4:1 container aspect to avoid side letterboxing)
 const VIEW_W = 160;
 const VIEW_H = 40;
-
-// Horizon runs through the graph
 const HORIZON_Y = 24;
-
-// Curve amplitude (peak above horizon, trough below horizon)
 const AMP = 14;
 
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
@@ -29,7 +20,25 @@ type SkyStripe = {
   width: number;
   zenith: RGB;
   horizon: RGB;
+  sunAltDeg: number;
 };
+
+type Star = {
+  x: number;
+  y: number;
+  r: number;
+  opacity: number;
+};
+
+type Cloud = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+};
+
+type SunPathSample = AstronomySummary["sun"]["path"]["samples"][number];
 
 const TWILIGHT_BAND_COLOR: Record<TwilightPhase, string> = {
   day: "#8ec9ff",
@@ -68,7 +77,11 @@ function rgbToCss(c: RGB, a = 1) {
   return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a})`;
 }
 
-// Ascending keyframes by sun altitude.
+function noise(seed: number) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
+  return value - Math.floor(value);
+}
+
 const SKY_KEYS_ASC = [
   { alt: -40, zenith: { r: 3, g: 4, b: 12 }, horizon: { r: 3, g: 4, b: 12 } },
   {
@@ -178,34 +191,64 @@ function buildCurvePath(samples = 200) {
   return d.trim();
 }
 
-function buildSkyStripes(
-  lat: number,
-  lon: number,
-  startMs: number,
-  endMs: number,
-  count: number,
-): SkyStripe[] {
-  const stripes: SkyStripe[] = [];
-  const n = Math.max(2, count);
-  const spanMs = Math.max(1, endMs - startMs);
-  const colW = VIEW_W / (n - 1);
+function buildSkyStripes(samples: SunPathSample[]): SkyStripe[] {
+  if (!samples.length) return [];
+  const count = Math.max(2, samples.length);
+  const colW = VIEW_W / (count - 1);
 
-  for (let i = 0; i < n; i += 1) {
-    const t = i / (n - 1);
-    const whenMs = startMs + t * spanMs;
-    const sunPos = SunCalc.getPosition(new Date(whenMs), lat, lon);
-    const sunAltDeg = (sunPos.altitude * 180) / Math.PI;
-    const colors = skyColorsForSunAlt(sunAltDeg);
-
-    stripes.push({
-      x: i * colW,
+  return samples.map((sample, index) => {
+    const colors = skyColorsForSunAlt(sample.altitude_deg);
+    return {
+      x: index * colW,
       width: colW + 1,
       zenith: colors.zenith,
       horizon: colors.horizon,
+      sunAltDeg: sample.altitude_deg,
+    };
+  });
+}
+
+function buildStars(stripes: SkyStripe[]): Star[] {
+  const stars: Star[] = [];
+
+  for (let i = 0; i < stripes.length; i += 1) {
+    const stripe = stripes[i];
+    if (stripe.sunAltDeg > -8) continue;
+
+    const darkness = clamp01((-stripe.sunAltDeg - 8) / 20);
+    const chance = 0.12 + darkness * 0.24;
+    if (noise(i + 11) > chance) continue;
+
+    stars.push({
+      x: stripe.x + stripe.width * noise(i + 31),
+      y: 2 + noise(i + 59) * (HORIZON_Y * 0.62),
+      r: 0.1 + noise(i + 79) * 0.18,
+      opacity: 0.35 + darkness * 0.45 + noise(i + 101) * 0.08,
     });
   }
 
-  return stripes;
+  return stars;
+}
+
+function buildClouds(stripes: SkyStripe[]): Cloud[] {
+  const clouds: Cloud[] = [];
+
+  for (let i = 0; i < stripes.length; i += 10) {
+    const stripe = stripes[i];
+    if (stripe.sunAltDeg < -3) continue;
+    if (noise(i + 211) > 0.42) continue;
+
+    const daylight = clamp01((stripe.sunAltDeg + 3) / 24);
+    clouds.push({
+      x: stripe.x + stripe.width * 0.5,
+      y: 4 + noise(i + 223) * (HORIZON_Y * 0.42),
+      width: 7 + noise(i + 227) * 10,
+      height: 1.6 + noise(i + 229) * 2.8,
+      opacity: 0.05 + daylight * 0.08 + noise(i + 233) * 0.03,
+    });
+  }
+
+  return clouds;
 }
 
 const CURVE_PATH = buildCurvePath(220);
@@ -219,28 +262,22 @@ export default function MoonAltitudeGraph({
   lon: number;
   tz: string;
 }) {
-  const nowQ = useLunarNow(lat, lon, tz);
-  const todayQ = useMoonToday(lat, lon, tz);
-  const sunQ = useSunToday(lat, lon, tz);
-  const twilightQ = useTwilight(lat, lon, tz);
+  const summaryQ = useAstronomySummary(lat, lon, tz);
   const idPrefix = useId().replace(/:/g, "-");
 
-  const ready = !!nowQ.data && !!todayQ.data && !nowQ.error && !todayQ.error;
-  const nowIso = nowQ.data?.whenISO;
-  const now = nowIso ? new Date(nowIso) : new Date();
+  if (!summaryQ.data || summaryQ.error) return null;
+
+  const summary = summaryQ.data;
+  const now = new Date(summary.meta.date.current_local);
   const nowMs = now.getTime();
 
-  const riseIso =
-    todayQ.data?.internal.rise ?? todayQ.data?.external.rise ?? undefined;
-  const setIso = todayQ.data?.internal.set ?? todayQ.data?.external.set ?? undefined;
+  const riseIso = summary.moon.events.rise_local ?? undefined;
+  const setIso = summary.moon.events.set_local ?? undefined;
   const rise = riseIso ? new Date(riseIso) : null;
   const set = setIso ? new Date(setIso) : null;
+  const prevSetIso = summary.moon.events.previous_set_local ?? undefined;
+  const nextRiseIso = summary.moon.events.rise_local ?? undefined;
 
-  const prevSetIso =
-    todayQ.data?.internal.prevSet ?? todayQ.data?.external.prevSet;
-  const nextRiseIso = todayQ.data?.internal.rise ?? todayQ.data?.external.rise;
-
-  // Moon cycle position on the stylized curve.
   let cycleT = 0.25;
   if (
     prevSetIso &&
@@ -279,27 +316,15 @@ export default function MoonAltitudeGraph({
   }
   cycleT = clamp01(cycleT);
 
-  // Sun position on same stylized curve using daylight window.
+  const sunPathStart = new Date(summary.sun.path.window_start_local).getTime();
+  const sunPathEnd = new Date(summary.sun.path.window_end_local).getTime();
   let sunCycleT = 0.25;
-  let sunStartMs = nowMs - 12 * 60 * 60 * 1000;
-  let sunEndMs = nowMs + 12 * 60 * 60 * 1000;
-  const sunDataReady = !!sunQ.data && !sunQ.error;
-
-  if (sunDataReady) {
-    const sunriseIso = sunQ.data?.sunriseLocal ?? null;
-    const sunsetIso = sunQ.data?.sunsetLocal ?? null;
-    if (sunriseIso && sunsetIso) {
-      const sunrise = new Date(sunriseIso);
-      const sunset = new Date(sunsetIso);
-      const span = sunset.getTime() - sunrise.getTime();
-      if (span > 0) {
-        const pad = span / 2;
-        sunStartMs = sunrise.getTime() - pad;
-        sunEndMs = sunset.getTime() + pad;
-        const total = sunEndMs - sunStartMs;
-        if (total > 0) sunCycleT = (now.getTime() - sunStartMs) / total;
-      }
-    }
+  if (
+    Number.isFinite(sunPathStart) &&
+    Number.isFinite(sunPathEnd) &&
+    sunPathEnd > sunPathStart
+  ) {
+    sunCycleT = (nowMs - sunPathStart) / (sunPathEnd - sunPathStart);
   }
   sunCycleT = clamp01(sunCycleT);
 
@@ -307,62 +332,53 @@ export default function MoonAltitudeGraph({
   const dotY = yOnCurve(cycleT);
   const sunDotX = sunCycleT * VIEW_W;
   const sunDotY = yOnCurve(sunCycleT);
-  const moonMarker = nowQ.data?.internal;
 
-  const twilightPhase = normalizeTwilightPhase(twilightQ.data?.currentPhase);
+  const moonMarker = summary.moon.current;
+  const twilightPhase = normalizeTwilightPhase(summary.twilight.current_phase);
   const twilightLabel = TWILIGHT_LABEL[twilightPhase];
 
-  const skyStripes = useMemo(
-    () => buildSkyStripes(lat, lon, sunStartMs, sunEndMs, 220),
-    [lat, lon, sunStartMs, sunEndMs],
-  );
+  const skyStripes = buildSkyStripes(summary.sun.path.samples);
+  const stars = buildStars(skyStripes);
+  const clouds = buildClouds(skyStripes);
 
-  const twilightBands = useMemo(
-    () =>
-      (twilightQ.data?.segments ?? [])
-        .map((segment) => ({
-          startMs: new Date(segment.startLocal).getTime(),
-          endMs: new Date(segment.endLocal).getTime(),
-          phase: normalizeTwilightPhase(segment.phase),
-        }))
-        .filter(
-          (segment) =>
-            Number.isFinite(segment.startMs) &&
-            Number.isFinite(segment.endMs) &&
-            segment.endMs > segment.startMs,
-        )
-        .sort((a, b) => a.startMs - b.startMs),
-    [twilightQ.data?.segments],
-  );
+  const twilightBands = summary.twilight.segments
+    .map((segment) => ({
+      startMs: new Date(segment.start_local).getTime(),
+      endMs: new Date(segment.end_local).getTime(),
+      phase: normalizeTwilightPhase(segment.phase),
+    }))
+    .filter(
+      (segment) =>
+        Number.isFinite(segment.startMs) &&
+        Number.isFinite(segment.endMs) &&
+        segment.endMs > segment.startMs,
+    )
+    .sort((a, b) => a.startMs - b.startMs);
 
-  const nextPhaseStartLabel = useMemo(
-    () =>
-      TWILIGHT_LEGEND_ORDER.reduce(
-        (acc, phase) => {
-          const starts = twilightBands
-            .filter((band) => band.phase === phase)
-            .map((band) => band.startMs)
-            .sort((a, b) => a - b);
+  const nextPhaseStartLabel = TWILIGHT_LEGEND_ORDER.reduce(
+    (acc, phase) => {
+      const starts = twilightBands
+        .filter((band) => band.phase === phase)
+        .map((band) => band.startMs)
+        .sort((a, b) => a - b);
 
-          if (!starts.length) {
-            acc[phase] = "—";
-            return acc;
-          }
+      if (!starts.length) {
+        acc[phase] = "—";
+        return acc;
+      }
 
-          const upcoming = starts.find((startMs) => startMs >= nowMs);
-          const nextStartMs = upcoming ?? starts[0] + 24 * 60 * 60 * 1000;
-          acc[phase] = formatInTimeZone(new Date(nextStartMs), tz, "h:mm a");
-          return acc;
-        },
-        {} as Record<TwilightPhase, string>,
-      ),
-    [twilightBands, nowMs, tz],
+      const upcoming = starts.find((startMs) => startMs >= nowMs);
+      const nextStartMs = upcoming ?? starts[0] + 24 * 60 * 60 * 1000;
+      acc[phase] = formatInTimeZone(new Date(nextStartMs), tz, "h:mm a");
+      return acc;
+    },
+    {} as Record<TwilightPhase, string>,
   );
 
   const sunriseLegendIso =
-    twilightQ.data?.sunEvents?.sunriseLocal ?? sunQ.data?.sunriseLocal ?? null;
+    summary.twilight.sun_events.sunrise_local ?? summary.sun.events.sunrise_local ?? null;
   const sunsetLegendIso =
-    twilightQ.data?.sunEvents?.sunsetLocal ?? sunQ.data?.sunsetLocal ?? null;
+    summary.twilight.sun_events.sunset_local ?? summary.sun.events.sunset_local ?? null;
   const sunriseLegendLabel = sunriseLegendIso
     ? formatInTimeZone(new Date(sunriseLegendIso), tz, "h:mm a")
     : "—";
@@ -370,215 +386,260 @@ export default function MoonAltitudeGraph({
     ? formatInTimeZone(new Date(sunsetLegendIso), tz, "h:mm a")
     : "—";
 
-  const lastUpdatedMs = Math.max(
-    nowQ.dataUpdatedAt ?? 0,
-    todayQ.dataUpdatedAt ?? 0,
-    sunQ.dataUpdatedAt ?? 0,
-    twilightQ.dataUpdatedAt ?? 0,
-  );
-  const lastUpdatedLabel = lastUpdatedMs
-    ? formatInTimeZone(new Date(lastUpdatedMs), tz, "h:mm a")
+  const lastUpdatedLabel = summaryQ.dataUpdatedAt
+    ? formatInTimeZone(new Date(summaryQ.dataUpdatedAt), tz, "h:mm a")
     : "—";
-  const isUpdating =
-    nowQ.isFetching || todayQ.isFetching || sunQ.isFetching || twilightQ.isFetching;
 
   const plotClipId = `${idPrefix}-plotClip`;
   const aboveHorizonClipId = `${idPrefix}-aboveHorizon`;
   const auraBlurId = `${idPrefix}-auraBlur`;
-
-  if (!ready) return null;
+  const cloudBlurId = `${idPrefix}-cloudBlur`;
+  const starGlowId = `${idPrefix}-starGlow`;
 
   return (
-    <div className="flex h-full w-full flex-col rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
-      <div className="shrink-0">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
-            Moon/Sun altitude
-          </div>
-          <div className="text-[11px] text-sky-100/70">
-            Updated {lastUpdatedLabel}
-            {isUpdating ? " · updating" : ""}
-          </div>
+    <div className="w-full rounded-2xl bg-slate-950/68 p-5 ring-1 ring-white/12 backdrop-blur">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
+          Moon/Sun altitude
         </div>
-
-        <div className="aspect-[4/1] w-full overflow-hidden rounded-xl bg-black/60">
-          <svg
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            preserveAspectRatio="none"
-            className="block h-full w-full"
-            style={{ isolation: "isolate" }}
-          >
-            <defs>
-              <clipPath id={plotClipId}>
-                <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
-              </clipPath>
-
-              <clipPath id={aboveHorizonClipId}>
-                <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
-              </clipPath>
-
-              <filter
-                id={auraBlurId}
-                x="-50%"
-                y="-50%"
-                width="200%"
-                height="200%"
-              >
-                <feGaussianBlur stdDeviation="10" />
-              </filter>
-
-              {skyStripes.map((stripe, idx) => {
-                const gradId = `${idPrefix}-sky-${idx}`;
-                const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
-                return (
-                  <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
-                    <stop offset="65%" stopColor={rgbToCss(mid, 1)} />
-                    <stop offset="100%" stopColor={rgbToCss(stripe.horizon, 1)} />
-                  </linearGradient>
-                );
-              })}
-            </defs>
-
-            <g clipPath={`url(#${plotClipId})`}>
-              {/* 1) Sky background */}
-              <g id="bg">
-                {skyStripes.map((stripe, idx) => (
-                  <rect
-                    key={`sky-col-${idx}`}
-                    x={stripe.x}
-                    y="0"
-                    width={stripe.width}
-                    height={HORIZON_Y}
-                    fill={`url(#${idPrefix}-sky-${idx})`}
-                  />
-                ))}
-                <rect
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={HORIZON_Y}
-                  fill="rgba(0,0,0,0.10)"
-                />
-                <rect
-                  x="0"
-                  y={HORIZON_Y}
-                  width={VIEW_W}
-                  height={VIEW_H - HORIZON_Y}
-                  fill="#000"
-                />
-              </g>
-
-              {/* 2) Altitude curves/horizon */}
-              <g id="lines">
-                <line
-                  x1="0"
-                  y1={HORIZON_Y}
-                  x2={VIEW_W}
-                  y2={HORIZON_Y}
-                  stroke="#6b7280"
-                  strokeWidth="0.6"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <path
-                  d={CURVE_PATH}
-                  stroke="#9ca3af"
-                  strokeWidth="1.2"
-                  vectorEffect="non-scaling-stroke"
-                  fill="none"
-                />
-              </g>
-
-              {/* Optional contrast pockets under aura for daytime separation */}
-              <g
-                id="glow-contrast"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                filter={`url(#${auraBlurId})`}
-              >
-                <circle cx={dotX} cy={dotY} r="12" fill="#020617" opacity="0.16" />
-                {sunDataReady ? (
-                  <circle cx={sunDotX} cy={sunDotY} r="10" fill="#020617" opacity="0.12" />
-                ) : null}
-              </g>
-
-              {/* 3) Glow pass */}
-              <g
-                id="glow"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                style={{ mixBlendMode: "screen" }}
-                filter={`url(#${auraBlurId})`}
-              >
-                <circle cx={dotX} cy={dotY} r="16" fill="rgba(180,210,255,0.38)" />
-                {sunDataReady ? (
-                  <circle cx={sunDotX} cy={sunDotY} r="14" fill="rgba(255,220,120,0.46)" />
-                ) : null}
-              </g>
-
-              {/* 4) Crisp markers on top */}
-              <g id="markers">
-                <MoonPhaseCircle
-                  mode="g"
-                  cx={dotX}
-                  cy={dotY}
-                  r={2.25}
-                  size={16}
-                  illuminationFrac={moonMarker?.illumination}
-                  waxing={moonMarker?.waxing}
-                  phaseAngleDeg={moonMarker?.phaseAngleDeg}
-                  brightLimbAngleDeg={moonMarker?.brightLimbAngleDeg}
-                />
-                {sunDataReady ? (
-                  <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
-                ) : null}
-              </g>
-            </g>
-          </svg>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-sky-100/70">
-          <div className="inline-flex items-center gap-2">
-            <span
-              className="h-2 w-2 rounded-full ring-1 ring-white/20"
-              style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
-            />
-            Twilight phase: <span className="font-semibold">{twilightLabel}</span>
-          </div>
-          {twilightQ.error ? (
-            <div className="text-sky-100/55">Twilight unavailable</div>
-          ) : null}
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-sky-100/55">
-          {TWILIGHT_LEGEND_ORDER.map((phase) => (
-            <span key={phase} className="inline-flex items-center gap-1.5">
-              <span
-                className="h-2 w-2 rounded-sm ring-1 ring-white/15"
-                style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
-              />
-              <span className="inline-flex flex-col leading-tight">
-                <span>{TWILIGHT_LABEL[phase]}</span>
-                <span className="text-[10px] normal-case tracking-normal text-sky-100/45">
-                  {nextPhaseStartLabel[phase]}
-                </span>
-              </span>
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-sky-100/65">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
-            Sunrise <span className="font-semibold">{sunriseLegendLabel}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
-            Sunset <span className="font-semibold">{sunsetLegendLabel}</span>
-          </span>
+        <div className="text-[11px] text-sky-100/70">
+          Updated {lastUpdatedLabel}
+          {summaryQ.isFetching ? " · updating" : ""}
         </div>
       </div>
 
-      <div className="mt-4 flex min-h-0 flex-1 border-t border-white/10 pt-4">
-        <MoonPhaseCalendar tz={tz} />
+      <div className="aspect-[5/1.35] w-full overflow-hidden rounded-xl bg-black/60">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="none"
+          className="block h-full w-full"
+          style={{ isolation: "isolate" }}
+        >
+          <defs>
+            <clipPath id={plotClipId}>
+              <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
+            </clipPath>
+
+            <clipPath id={aboveHorizonClipId}>
+              <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
+            </clipPath>
+
+            <filter
+              id={auraBlurId}
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feGaussianBlur stdDeviation="10" />
+            </filter>
+
+            <filter
+              id={cloudBlurId}
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feGaussianBlur stdDeviation="1.2" />
+            </filter>
+
+            <filter
+              id={starGlowId}
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feGaussianBlur stdDeviation="0.12" />
+            </filter>
+
+            {skyStripes.map((stripe, idx) => {
+              const gradId = `${idPrefix}-sky-${idx}`;
+              const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
+              return (
+                <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
+                  <stop offset="65%" stopColor={rgbToCss(mid, 1)} />
+                  <stop offset="100%" stopColor={rgbToCss(stripe.horizon, 1)} />
+                </linearGradient>
+              );
+            })}
+          </defs>
+
+          <g clipPath={`url(#${plotClipId})`}>
+            <g id="bg">
+              {skyStripes.map((stripe, idx) => (
+                <rect
+                  key={`sky-col-${idx}`}
+                  x={stripe.x}
+                  y="0"
+                  width={stripe.width}
+                  height={HORIZON_Y}
+                  fill={`url(#${idPrefix}-sky-${idx})`}
+                />
+              ))}
+              <rect
+                x="0"
+                y="0"
+                width={VIEW_W}
+                height={HORIZON_Y}
+                fill="rgba(0,0,0,0.10)"
+              />
+              <rect
+                x="0"
+                y={HORIZON_Y}
+                width={VIEW_W}
+                height={VIEW_H - HORIZON_Y}
+                fill="#000"
+              />
+            </g>
+
+            <g
+              id="stars"
+              clipPath={`url(#${aboveHorizonClipId})`}
+              filter={`url(#${starGlowId})`}
+            >
+              {stars.map((star, idx) => (
+                <g key={`star-${idx}`} opacity={star.opacity}>
+                  <circle cx={star.x} cy={star.y} r={star.r} fill="#f8fafc" />
+                  {star.r > 0.22 ? (
+                    <path
+                      d={`M ${formatPathNumber(star.x - star.r * 1.35)},${formatPathNumber(star.y)} L ${formatPathNumber(star.x + star.r * 1.35)},${formatPathNumber(star.y)} M ${formatPathNumber(star.x)},${formatPathNumber(star.y - star.r * 1.35)} L ${formatPathNumber(star.x)},${formatPathNumber(star.y + star.r * 1.35)}`}
+                      stroke="rgba(248,250,252,0.5)"
+                      strokeWidth="0.08"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null}
+                </g>
+              ))}
+            </g>
+
+            <g
+              id="clouds"
+              clipPath={`url(#${aboveHorizonClipId})`}
+              filter={`url(#${cloudBlurId})`}
+            >
+              {clouds.map((cloud, idx) => (
+                <g key={`cloud-${idx}`} opacity={cloud.opacity}>
+                  <ellipse
+                    cx={cloud.x}
+                    cy={cloud.y}
+                    rx={cloud.width * 0.28}
+                    ry={cloud.height * 0.62}
+                    fill="rgba(255,255,255,0.95)"
+                  />
+                  <ellipse
+                    cx={cloud.x - cloud.width * 0.18}
+                    cy={cloud.y + cloud.height * 0.08}
+                    rx={cloud.width * 0.2}
+                    ry={cloud.height * 0.5}
+                    fill="rgba(255,255,255,0.86)"
+                  />
+                  <ellipse
+                    cx={cloud.x + cloud.width * 0.16}
+                    cy={cloud.y + cloud.height * 0.1}
+                    rx={cloud.width * 0.22}
+                    ry={cloud.height * 0.48}
+                    fill="rgba(255,255,255,0.82)"
+                  />
+                </g>
+              ))}
+            </g>
+
+            <g id="lines">
+              <line
+                x1="0"
+                y1={HORIZON_Y}
+                x2={VIEW_W}
+                y2={HORIZON_Y}
+                stroke="#6b7280"
+                strokeWidth="0.6"
+                vectorEffect="non-scaling-stroke"
+              />
+              <path
+                d={CURVE_PATH}
+                stroke="#9ca3af"
+                strokeWidth="1.2"
+                vectorEffect="non-scaling-stroke"
+                fill="none"
+              />
+            </g>
+
+            <g
+              id="glow-contrast"
+              clipPath={`url(#${aboveHorizonClipId})`}
+              filter={`url(#${auraBlurId})`}
+            >
+              <circle cx={dotX} cy={dotY} r="12" fill="#020617" opacity="0.16" />
+              <circle cx={sunDotX} cy={sunDotY} r="10" fill="#020617" opacity="0.12" />
+            </g>
+
+            <g
+              id="glow"
+              clipPath={`url(#${aboveHorizonClipId})`}
+              style={{ mixBlendMode: "screen" }}
+              filter={`url(#${auraBlurId})`}
+            >
+              <circle cx={dotX} cy={dotY} r="16" fill="rgba(180,210,255,0.38)" />
+              <circle cx={sunDotX} cy={sunDotY} r="14" fill="rgba(255,220,120,0.46)" />
+            </g>
+
+            <g id="markers">
+              <MoonPhaseCircle
+                mode="g"
+                cx={dotX}
+                cy={dotY}
+                r={2.25}
+                size={16}
+                illuminationFrac={moonMarker.illumination_frac}
+                waxing={moonMarker.waxing}
+                phaseAngleDeg={moonMarker.phase_angle_deg}
+                brightLimbAngleDeg={moonMarker.bright_limb_angle_deg}
+              />
+              <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-sky-100/70">
+        <div className="inline-flex items-center gap-2">
+          <span
+            className="h-2 w-2 rounded-full ring-1 ring-white/20"
+            style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
+          />
+          Twilight phase: <span className="font-semibold">{twilightLabel}</span>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-sky-100/55">
+        {TWILIGHT_LEGEND_ORDER.map((phase) => (
+          <span key={phase} className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 rounded-sm ring-1 ring-white/15"
+              style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
+            />
+            <span className="inline-flex flex-col leading-tight">
+              <span>{TWILIGHT_LABEL[phase]}</span>
+              <span className="text-[10px] normal-case tracking-normal text-sky-100/45">
+                {nextPhaseStartLabel[phase]}
+              </span>
+            </span>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-sky-100/65">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
+          Sunrise <span className="font-semibold">{sunriseLegendLabel}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
+          Sunset <span className="font-semibold">{sunsetLegendLabel}</span>
+        </span>
       </div>
     </div>
   );

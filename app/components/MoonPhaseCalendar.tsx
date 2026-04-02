@@ -1,270 +1,203 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import SunCalc from "suncalc";
-import { addDays, startOfWeek } from "date-fns";
-import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { addDays } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { useMoonPhaseWindow } from "../hooks/useAstronomy";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
-type MajorPhaseDefinition = {
-  key: string;
-  label: string;
-  shortLabel: string;
-  phaseAngleDeg: number;
-  illuminationFrac: number;
-  waxing: boolean;
-};
+const WINDOW_DAYS = 35;
 
-type CalendarEntry = MajorPhaseDefinition & {
-  instant: Date;
-  dateKey: string;
-};
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const GRID_DAYS = 42;
-const SEARCH_STEP_MS = 3 * 60 * 60 * 1000;
-const SEARCH_WINDOW_MS = 50 * 24 * 60 * 60 * 1000;
-const UPCOMING_PHASE_COUNT = 6;
-
-const MAJOR_PHASES: MajorPhaseDefinition[] = [
-  {
-    key: "new",
-    label: "New Moon",
-    shortLabel: "New",
-    phaseAngleDeg: 0,
-    illuminationFrac: 0,
-    waxing: true,
-  },
-  {
-    key: "first-quarter",
-    label: "First Quarter",
-    shortLabel: "First Q",
-    phaseAngleDeg: 90,
-    illuminationFrac: 0.5,
-    waxing: true,
-  },
-  {
-    key: "full",
-    label: "Full Moon",
-    shortLabel: "Full",
-    phaseAngleDeg: 180,
-    illuminationFrac: 1,
-    waxing: true,
-  },
-  {
-    key: "last-quarter",
-    label: "Last Quarter",
-    shortLabel: "Last Q",
-    phaseAngleDeg: 270,
-    illuminationFrac: 0.5,
-    waxing: false,
-  },
-];
-
-function clamp01(value: number) {
-  return Math.max(0, Math.min(1, value));
-}
-
-function getPhaseDefinition(targetIndex: number): MajorPhaseDefinition {
-  return MAJOR_PHASES[((targetIndex % 4) + 4) % 4];
-}
-
-function getDateKey(date: Date, tz: string) {
-  return formatInTimeZone(date, tz, "yyyy-MM-dd");
-}
-
-function getUpcomingPhaseEntries(now: Date, tz: string): CalendarEntry[] {
-  const initialPhase = SunCalc.getMoonIllumination(now).phase;
-  const entries: CalendarEntry[] = [];
-
-  let previousInstant = now;
-  let previousPhase = initialPhase;
-  let previousUnwrapped = initialPhase;
-  let cycleOffset = 0;
-  let nextTargetIndex = Math.floor(initialPhase * 4) + 1;
-
-  for (
-    let timeMs = now.getTime() + SEARCH_STEP_MS;
-    timeMs <= now.getTime() + SEARCH_WINDOW_MS &&
-    entries.length < UPCOMING_PHASE_COUNT;
-    timeMs += SEARCH_STEP_MS
-  ) {
-    const currentInstant = new Date(timeMs);
-    const currentPhase = SunCalc.getMoonIllumination(currentInstant).phase;
-
-    if (currentPhase < previousPhase - 0.5) {
-      cycleOffset += 1;
-    }
-
-    const currentUnwrapped = currentPhase + cycleOffset;
-
-    while (
-      nextTargetIndex / 4 <= currentUnwrapped &&
-      entries.length < UPCOMING_PHASE_COUNT
-    ) {
-      const targetUnwrapped = nextTargetIndex / 4;
-      const span = currentUnwrapped - previousUnwrapped;
-      const ratio = span > 0 ? (targetUnwrapped - previousUnwrapped) / span : 1;
-      const eventMs =
-        previousInstant.getTime() +
-        (currentInstant.getTime() - previousInstant.getTime()) * clamp01(ratio);
-      const definition = getPhaseDefinition(nextTargetIndex);
-      const instant = new Date(eventMs);
-
-      entries.push({
-        ...definition,
-        instant,
-        dateKey: getDateKey(instant, tz),
-      });
-
-      nextTargetIndex += 1;
-    }
-
-    previousInstant = currentInstant;
-    previousPhase = currentPhase;
-    previousUnwrapped = currentUnwrapped;
-  }
-
-  return entries;
+function formatRangeDate(dateIso: string, tz: string) {
+  return formatInTimeZone(fromZonedTime(`${dateIso}T12:00:00`, tz), tz, "MMM d");
 }
 
 export default function MoonPhaseCalendar({ tz }: { tz: string }) {
-  const { cells, entries, entriesByDate, rangeLabel, todayKey } = useMemo(() => {
-    const now = new Date();
-    const zonedNow = toZonedTime(now, tz);
-    const gridStart = startOfWeek(zonedNow, { weekStartsOn: 0 });
-    const phaseEntries = getUpcomingPhaseEntries(now, tz);
-    const entryMap = new Map<string, CalendarEntry[]>();
-
-    for (const entry of phaseEntries) {
-      const current = entryMap.get(entry.dateKey) ?? [];
-      current.push(entry);
-      entryMap.set(entry.dateKey, current);
-    }
-
-    return {
-      cells: Array.from({ length: GRID_DAYS }, (_, index) =>
-        addDays(gridStart, index),
-      ),
-      entries: phaseEntries,
-      entriesByDate: entryMap,
-      rangeLabel: `${formatInTimeZone(fromZonedTime(gridStart, tz), tz, "MMM d")} - ${formatInTimeZone(fromZonedTime(addDays(gridStart, GRID_DAYS - 1), tz), tz, "MMM d")}`,
-      todayKey: getDateKey(now, tz),
-    };
-  }, [tz]);
+  const rootRef = useRef<HTMLElement | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
-  const selectedEntry = selectedPhaseKey
-    ? entries.find(
-        (entry) => `${entry.key}-${entry.instant.toISOString()}` === selectedPhaseKey,
-      ) ?? null
-    : null;
+
+  const startDateIso = useMemo(() => {
+    const todayIso = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
+    const todayAnchor = fromZonedTime(`${todayIso}T12:00:00`, tz);
+    return formatInTimeZone(addDays(todayAnchor, weekOffset * 7), tz, "yyyy-MM-dd");
+  }, [tz, weekOffset]);
+
+  const phaseWindowQ = useMoonPhaseWindow(tz, startDateIso, WINDOW_DAYS);
+
+  useEffect(() => {
+    if (!selectedPhaseKey) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      setSelectedPhaseKey(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedPhaseKey(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedPhaseKey]);
+
+  if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
+    return (
+      <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+        <div className="text-sm text-slate-300/70">Loading calendar…</div>
+      </section>
+    );
+  }
+
+  if (phaseWindowQ.error || !phaseWindowQ.data) {
+    return (
+      <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+        <div className="text-sm text-slate-300/70">Calendar unavailable.</div>
+      </section>
+    );
+  }
+
+  const { days, meta } = phaseWindowQ.data;
+  const dayLabels = days.slice(0, 7).map((day) => day.weekday_short);
+  const rangeLabel = `${formatRangeDate(meta.window_start_local_date, tz)} - ${formatRangeDate(meta.window_end_local_date, tz)}`;
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-2 flex items-end justify-between gap-3">
+    <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-1.5 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
             Moon calendar
           </h3>
-          <p className="mt-1 text-sm text-slate-200/80">
-            Next 6 weeks of major phases
-          </p>
+          <p className="mt-1 text-[13px] text-slate-200/78">Major phases</p>
         </div>
-        <p className="text-[11px] text-slate-300/65">{rangeLabel}</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPhaseKey(null);
+              setWeekOffset((current) => Math.max(0, current - 1));
+            }}
+            disabled={weekOffset === 0}
+            aria-label="View previous week window"
+            className={`flex h-7 w-7 items-center justify-center rounded-full border text-sm transition ${
+              weekOffset === 0
+                ? "cursor-not-allowed border-white/8 text-slate-500/50"
+                : "border-white/10 text-slate-200/85 hover:border-white/20 hover:text-white"
+            }`}
+          >
+            &lt;
+          </button>
+          <p className="min-w-[8.5rem] text-center text-[11px] uppercase tracking-[0.18em] text-slate-300/65">
+            {rangeLabel}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPhaseKey(null);
+              setWeekOffset((current) => current + 1);
+            }}
+            aria-label="View next week window"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-sm text-slate-200/85 transition hover:border-white/20 hover:text-white"
+          >
+            &gt;
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-400/80">
-        {DAY_LABELS.map((label) => (
-          <div key={label} className="px-2">
+      <div className="grid grid-cols-7 gap-1 text-[10px] uppercase tracking-[0.2em] text-slate-400/80">
+        {dayLabels.map((label, index) => (
+          <div key={`${label}-${index}`} className="px-1">
             {label}
           </div>
         ))}
       </div>
 
-      <div className="mt-2 grid flex-1 grid-cols-7 gap-2">
-        {cells.map((cell) => {
-          const cellInstant = fromZonedTime(cell, tz);
-          const cellKey = getDateKey(cellInstant, tz);
-          const dayNumber = formatInTimeZone(cellInstant, tz, "d");
-          const monthLabel = formatInTimeZone(cellInstant, tz, "MMM");
-          const isToday = cellKey === todayKey;
-          const isPast = cellKey < todayKey;
-          const entriesForDay = entriesByDate.get(cellKey) ?? [];
-          const primaryEntry = entriesForDay[0];
+      <div className="mt-1.5 grid grid-cols-7 gap-1">
+        {days.map((day, index) => {
+          const dayNumber = String(Number(day.date_local.slice(-2)));
+          const isPast = day.date_local < meta.today_local_date;
+          const primaryEntry = day.phases[0];
+          const entryKey = primaryEntry
+            ? `${primaryEntry.key}-${primaryEntry.instant_utc}`
+            : null;
+          const isSelected = entryKey !== null && selectedPhaseKey === entryKey;
+          const rowIndex = Math.floor(index / 7);
+          const popupPlacement =
+            rowIndex <= 1 ? "top-[calc(100%+0.45rem)]" : "bottom-[calc(100%+0.45rem)]";
+          const pointerPlacement =
+            rowIndex <= 1
+              ? "top-[-0.4rem] border-b border-r"
+              : "bottom-[-0.4rem] border-t border-l";
 
           return (
             <div
-              key={cellKey}
-              className={`flex min-h-[3.35rem] flex-col rounded-xl border px-2 py-1.5 transition ${
+              key={day.date_local}
+              className={`relative flex h-[3.05rem] flex-col rounded-xl border px-1.5 py-1 transition ${
                 primaryEntry
                   ? "border-sky-300/35 bg-sky-400/10 shadow-[0_0_0_1px_rgba(125,211,252,0.05)]"
                   : "border-white/8 bg-slate-950/35"
-              } ${isToday ? "ring-1 ring-sky-300/55" : ""} ${isPast ? "opacity-55" : ""}`}
+              } ${day.is_today ? "ring-1 ring-sky-300/55" : ""} ${isPast ? "opacity-55" : ""}`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-100">{dayNumber}</div>
-                {dayNumber === "1" ? (
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400/75">
-                    {monthLabel}
-                  </div>
-                ) : null}
+                <div className="text-sm font-semibold leading-none text-slate-100">
+                  {dayNumber}
+                </div>
               </div>
 
               {primaryEntry ? (
                 <button
                   type="button"
-                  className={`mt-1 flex min-h-0 flex-1 items-center justify-center rounded-md transition hover:bg-white/8 focus:outline-none focus:ring-1 focus:ring-sky-300/60 ${
-                    selectedPhaseKey === `${primaryEntry.key}-${primaryEntry.instant.toISOString()}`
-                      ? "bg-white/8"
-                      : ""
+                  className={`mt-0.5 flex min-h-0 flex-1 items-center justify-center rounded-md transition hover:bg-white/8 focus:outline-none focus:ring-1 focus:ring-sky-300/60 ${
+                    isSelected ? "bg-white/8" : ""
                   }`}
                   onClick={() => {
-                    const entryKey = `${primaryEntry.key}-${primaryEntry.instant.toISOString()}`;
                     setSelectedPhaseKey((current) =>
                       current === entryKey ? null : entryKey,
                     );
                   }}
-                  aria-label={`${primaryEntry.label} on ${formatInTimeZone(primaryEntry.instant, tz, "MMMM d")} at ${formatInTimeZone(primaryEntry.instant, tz, "h:mm a")}`}
+                  aria-label={`${primaryEntry.label} on ${formatInTimeZone(new Date(primaryEntry.instant_local), tz, "MMMM d")} at ${formatInTimeZone(new Date(primaryEntry.instant_local), tz, "h:mm a")}`}
                 >
                   <MoonPhaseCircle
                     className="shrink-0"
-                    size={18}
-                    illuminationFrac={primaryEntry.illuminationFrac}
+                    size={14}
+                    illuminationFrac={primaryEntry.illumination_frac}
                     waxing={primaryEntry.waxing}
-                    phaseAngleDeg={primaryEntry.phaseAngleDeg}
+                    phaseAngleDeg={primaryEntry.phase_angle_deg}
                   />
                 </button>
               ) : (
-                <div className="mt-1 flex-1 rounded-lg border border-dashed border-white/6" />
+                <div className="mt-0.5 flex-1" />
               )}
+
+              {primaryEntry && isSelected ? (
+                <div
+                  className={`pointer-events-none absolute left-1/2 z-30 w-max min-w-[9rem] max-w-[10rem] -translate-x-1/2 rounded-xl border border-sky-200/20 bg-slate-950/98 px-3 py-2 text-center shadow-[0_18px_40px_rgba(2,6,23,0.72)] ring-1 ring-sky-300/18 backdrop-blur-md ${popupPlacement}`}
+                >
+                  <div
+                    className={`absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-sky-200/20 bg-slate-950/98 ${pointerPlacement}`}
+                  />
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/72">
+                    {primaryEntry.label}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-white">
+                    {formatInTimeZone(new Date(primaryEntry.instant_local), tz, "h:mm a")}
+                  </div>
+                  <div className="mt-1 text-[10px] text-slate-300/65">
+                    Click anywhere to close
+                  </div>
+                </div>
+              ) : null}
             </div>
           );
         })}
-      </div>
-
-      <div className="mt-3 min-h-[3.5rem] rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2">
-        {selectedEntry ? (
-          <div className="flex items-center gap-3">
-            <MoonPhaseCircle
-              size={20}
-              illuminationFrac={selectedEntry.illuminationFrac}
-              waxing={selectedEntry.waxing}
-              phaseAngleDeg={selectedEntry.phaseAngleDeg}
-            />
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-slate-100">
-                {selectedEntry.label}
-              </div>
-              <div className="text-xs text-slate-300/65">
-                {formatInTimeZone(selectedEntry.instant, tz, "MMM d · h:mm a")}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full items-center text-xs text-slate-300/60">
-            Click a moon phase to see its time.
-          </div>
-        )}
       </div>
     </section>
   );

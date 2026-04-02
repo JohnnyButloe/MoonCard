@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from skyfield import almanac
 from skyfield.api import wgs84
 
-from app.python_service.moon import local_day_bounds, tz_from_longitude
+from app.python_service.moon import local_day_bounds, resolve_tz
 from app.python_service.moon_ephem import eph, ts
 
 
@@ -18,13 +18,18 @@ class SunEvents:
     sunset: datetime | None
 
 
-def sun_events_for_date(lat_deg: float, lon_deg: float, date_iso: str) -> SunEvents:
+def sun_events_for_date(
+    lat_deg: float,
+    lon_deg: float,
+    date_iso: str,
+    tz_name: str | None = None,
+) -> SunEvents:
     """Return sunrise/sunset for the given *local* calendar date."""
     observer = wgs84.latlon(lat_deg, lon_deg)
     target_date = date.fromisoformat(date_iso)
-    tz_local = tz_from_longitude(lon_deg)
+    tz_local = resolve_tz(tz_name, lon_deg)
 
-    start_utc, end_utc = local_day_bounds(date_iso, lon_deg)
+    start_utc, end_utc = local_day_bounds(date_iso, lon_deg, tz_local)
 
     rs_start_utc = start_utc - timedelta(days=1)
     rs_end_utc = end_utc + timedelta(days=1)

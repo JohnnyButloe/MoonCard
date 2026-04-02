@@ -5,13 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
 
-from skyfield.api import load, wgs84
+from skyfield.api import wgs84
 from skyfield import almanac
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-# Load ephemeris once at module import
-ts = load.timescale()
-eph = load("de421.bsp")  # or your existing ephemeris file
+from app.python_service.moon_ephem import eph, ts
+
 MOON = eph["moon"]
 EARTH = eph["earth"]
 # Calibrated event horizon for Moon rise/set.
