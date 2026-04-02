@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  cacheHeaders,
+  fetchWithTimeout,
+  noStoreHeaders,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_TTL_SECONDS,
+} from "../../../lib/apiUtils";
 
 const Q = z.object({
   lat: z.coerce.number().min(-90).max(90),
@@ -17,7 +24,10 @@ export async function GET(req: NextRequest) {
     offset: searchParams.get("offset") ?? "+00:00",
   });
   if (!parsed.success) {
-    return NextResponse.json;
+    return NextResponse.json(
+      { error: "invalid-params", detail: parsed.error.flatten() },
+      { status: 400, headers: noStoreHeaders },
+    );
   }
   const { lat, lon, date, offset } = parsed.data;
 
@@ -27,19 +37,62 @@ export async function GET(req: NextRequest) {
   upstream.searchParams.set("date", date);
   upstream.searchParams.set("offset", offset);
 
-  const res = await fetch(upstream, {
-    headers: {
-      // Identify app per MET's TOS/FAQ Policy
-      // Include project name and a contract email.
-      "User-Agent": "MoonCard (support@mooncard.app",
-    },
-    // no-store to avoid mixing locations while developing; can tune later
-    cache: "no-store",
-  });
+  const start = Date.now();
+  try {
+    const res = await fetchWithTimeout(
+      upstream.toString(),
+      {
+        headers: {
+          // Identify app per MET's TOS/FAQ Policy
+          // Include project name and a contract email.
+          "User-Agent": "MoonCard (support@mooncard.app",
+        },
+        next: { revalidate: DEFAULT_TTL_SECONDS },
+      },
+      DEFAULT_TIMEOUT_MS,
+    );
 
-  if (!res.ok) {
-    return NextResponse.json({ error: "metno-failed" }, { status: 502 });
+    const text = await res.text();
+    const latencyMs = Date.now() - start;
+    if (!res.ok) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          route: "/api/metno/moon",
+          msg: "upstream-failed",
+          status: res.status,
+          latencyMs,
+          url: upstream.toString(),
+          body: text.slice(0, 500),
+        }),
+      );
+      return NextResponse.json(
+        { error: "metno-failed", status: res.status },
+        { status: 502, headers: noStoreHeaders },
+      );
+    }
+    return NextResponse.json(JSON.parse(text), { headers: cacheHeaders() });
+  } catch (err: unknown) {
+    const latencyMs = Date.now() - start;
+    const message = err instanceof Error ? err.message : String(err);
+    const name = err instanceof Error ? err.name : "";
+    console.error(
+      JSON.stringify({
+        level: "error",
+        route: "/api/metno/moon",
+        msg: "upstream-exception",
+        latencyMs,
+        url: upstream.toString(),
+        error: message,
+      }),
+    );
+    const status =
+      name.includes("AbortError") || message.includes("abort")
+        ? 504
+        : 502;
+    return NextResponse.json(
+      { error: "metno-exception" },
+      { status, headers: noStoreHeaders },
+    );
   }
-  const json = await res.json();
-  return NextResponse.json(json);
 }

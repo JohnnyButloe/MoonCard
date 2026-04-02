@@ -12,7 +12,8 @@ from skyfield.api import wgs84
 from app.python_service.moon_ephem import eph, ts
 
 # Reuse your existing "local day tied to longitude" helpers (keeps conventions consistent)
-from app.python_service.moon import tz_from_longitude, local_day_bounds
+from app.python_service.moon import local_day_bounds, resolve_tz
+from app.python_service.sun import sun_events_for_date
 
 
 _PHASES = {
@@ -28,6 +29,10 @@ class TwilightSegment(TypedDict):
     phase: str
     startLocal: str
     endLocal: str
+
+class SunEvents(TypedDict):
+    sunriseLocal: Optional[str]
+    sunsetLocal: Optional[str]
 
 
 def _offset_str_from_tz(tzinfo) -> str:
@@ -54,38 +59,18 @@ def _parse_utc_datetime(datetime_iso: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def twilight_for_date(
+def twilight_segments_for_date(
     lat_deg: float,
     lon_deg: float,
     date_iso: str,
-    datetime_iso: Optional[str] = None,
+    tz_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Return twilight segments for the given *local* calendar date.
-
-    This follows the same convention as moon.py:
-    - Local day is approximated from longitude (tz_from_longitude)
-    - We compute events between local midnight and the following midnight
-
-    Parameters:
-      date_iso: "YYYY-MM-DD" local calendar date (same as /moon/events)
-      datetime_iso: optional UTC ISO string (e.g. "2026-01-10T03:15:00Z")
-                    used to compute `currentPhase` + `nextTransitionLocal`.
-                    If omitted, uses current UTC time.
-
-    Returns:
-      {
-        "timezoneOffset": "-05:00",
-        "currentPhase": "nautical",
-        "nextTransitionLocal": "2026-01-10T06:21:00-05:00" | null,
-        "segments": [{phase,startLocal,endLocal}, ...]
-      }
-    """
-    tz_local = tz_from_longitude(lon_deg)
+    """Return twilight segments for the given local calendar date."""
+    tz_local = resolve_tz(tz_name, lon_deg)
     timezone_offset = _offset_str_from_tz(tz_local)
 
     # Get local civil-day bounds in UTC (matches moon.py pattern)
-    start_utc, end_utc = local_day_bounds(date_iso, lon_deg)
+    start_utc, end_utc = local_day_bounds(date_iso, lon_deg, tz_local)
     start_local = start_utc.astimezone(tz_local)
     end_local = end_utc.astimezone(tz_local)
 
@@ -98,6 +83,13 @@ def twilight_for_date(
 
     # Skyfield function returning 0..4 = dark, astro, naut, civil, day
     f = almanac.dark_twilight_day(eph, topos)
+
+    sun_events_raw = sun_events_for_date(
+        lat_deg=lat_deg,
+        lon_deg=lon_deg,
+        date_iso=date_iso,
+        tz_name=tz_name,
+    )
 
     # Find transitions during this local civil day
     times, states = almanac.find_discrete(t0, t1, f)
@@ -131,21 +123,54 @@ def twilight_for_date(
         }
     )
 
-    # Compute currentPhase + next transition
-    now_utc = _parse_utc_datetime(datetime_iso) if datetime_iso else datetime.now(timezone.utc)
-    now_t = ts.from_datetime(now_utc)
-
-    current_phase = _PHASES[int(f(now_t))]
-
-    next_transition_local: Optional[str] = None
-    for ti in times:
-        if ti.utc_datetime().replace(tzinfo=timezone.utc) > now_utc:
-            next_transition_local = ti.utc_datetime().astimezone(tz_local).isoformat()
-            break
+    sun_events: SunEvents = {
+        "sunriseLocal": sun_events_raw.sunrise.isoformat() if sun_events_raw.sunrise else None,
+        "sunsetLocal": sun_events_raw.sunset.isoformat() if sun_events_raw.sunset else None,
+    }
 
     return {
         "timezoneOffset": timezone_offset,
+        "segments": segments,
+        "sunEvents": sun_events,
+    }
+
+
+def twilight_for_date(
+    lat_deg: float,
+    lon_deg: float,
+    date_iso: str,
+    datetime_iso: Optional[str] = None,
+    tz_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Return twilight segments and current phase for the given local calendar date.
+    """
+    base = twilight_segments_for_date(
+        lat_deg=lat_deg,
+        lon_deg=lon_deg,
+        date_iso=date_iso,
+        tz_name=tz_name,
+    )
+    now_utc = (
+        _parse_utc_datetime(datetime_iso)
+        if datetime_iso
+        else datetime.now(timezone.utc)
+    )
+    tz_local = resolve_tz(tz_name, lon_deg)
+    now_local = now_utc.astimezone(tz_local)
+
+    current_phase = base["segments"][-1]["phase"] if base["segments"] else "dark"
+    next_transition_local: Optional[str] = None
+    for segment in base["segments"]:
+        start_local = datetime.fromisoformat(segment["startLocal"])
+        end_local = datetime.fromisoformat(segment["endLocal"])
+        if start_local <= now_local < end_local:
+            current_phase = segment["phase"]
+            next_transition_local = segment["endLocal"]
+            break
+
+    return {
+        **base,
         "currentPhase": current_phase,
         "nextTransitionLocal": next_transition_local,
-        "segments": segments,
     }

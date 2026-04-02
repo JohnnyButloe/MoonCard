@@ -1,19 +1,19 @@
 "use client";
-import { useLunarNow, useMoonToday } from "../hooks/useLunar";
+
+import { useAstronomySummary } from "../hooks/useAstronomy";
+import { useWeatherNow } from "../hooks/useWeather";
+import type { WeatherCondition } from "../providers/weather";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
 
   const d = new Date(iso);
-
-  // Example output: "9:09 AM EST" / "9:09 AM PDT"
-  // MDN: Intl.DateTimeFormat with timeStyle + timeZoneName formats nice local times. :contentReference[oaicite:3]{index=3}
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
     timeZone: tz,
-    timeZoneName: "short", // EST / EDT, etc.
+    timeZoneName: "short",
   }).format(d);
 }
 
@@ -31,12 +31,130 @@ function formatLocalDateTime(iso: string | undefined, tz: string): string {
   }).format(d);
 }
 
-/**
- * MoonNowCard displays current lunar information and today's lunar events.
- * It now supports comparison between the internal Python ephemeris service
- * and external SunCalc/MET data. Values from the internal source are
- * displayed first, followed by a slash and the external value.
- */
+function formatTimeOrDateTime(iso: string | undefined, tz: string): string {
+  if (!iso) return "—";
+  const eventDate = new Date(iso);
+  if (!Number.isFinite(eventDate.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  }).format(eventDate);
+}
+
+function toCompass(azDeg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((azDeg % 360) + 360) % 360;
+  return dirs[Math.round(normalized / 45) % dirs.length];
+}
+
+function formatAzimuthWithDirection(azDeg: number): string {
+  const normalized = Math.round(((azDeg % 360) + 360) % 360);
+  return `${toCompass(normalized)} (${normalized}°)`;
+}
+
+function weatherLabel(condition: WeatherCondition | undefined): string {
+  switch (condition) {
+    case "clear":
+      return "Clear";
+    case "partly_cloudy":
+      return "Partly cloudy";
+    case "overcast":
+      return "Overcast";
+    case "rain":
+      return "Rain";
+    case "snow":
+      return "Snow";
+    case "storm":
+      return "Storm";
+    case "fog":
+      return "Fog";
+    default:
+      return "Weather";
+  }
+}
+
+function WeatherCloudSymbol({
+  condition,
+  size = 28,
+}: {
+  condition: WeatherCondition | undefined;
+  size?: number;
+}) {
+  const stroke = "rgba(226,232,240,0.92)";
+  const baseCloud = (
+    <path
+      d="M17 41h30a8.5 8.5 0 0 0 0-17 13.5 13.5 0 0 0-25.8-3.9A9.5 9.5 0 0 0 17 41Z"
+      fill="rgba(148,163,184,0.2)"
+      stroke={stroke}
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+      {condition === "clear" || condition === "partly_cloudy" ? (
+        <circle
+          cx="46"
+          cy="18"
+          r="7"
+          fill="rgba(250,204,21,0.25)"
+          stroke="rgba(250,204,21,0.95)"
+          strokeWidth="1.8"
+        />
+      ) : null}
+
+      {condition === "overcast" ? (
+        <path
+          d="M12 36h24a7 7 0 0 0 0-14 11 11 0 0 0-20.7-3.4A8 8 0 0 0 12 36Z"
+          fill="rgba(148,163,184,0.18)"
+          stroke={stroke}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+
+      {baseCloud}
+
+      {condition === "rain" ? (
+        <g stroke="rgba(125,211,252,0.95)" strokeWidth="2.3" strokeLinecap="round">
+          <line x1="23" y1="46" x2="20" y2="54" />
+          <line x1="33" y1="47" x2="30" y2="56" />
+          <line x1="43" y1="46" x2="40" y2="54" />
+        </g>
+      ) : null}
+
+      {condition === "snow" ? (
+        <g fill="rgba(224,242,254,0.95)">
+          <circle cx="23" cy="52" r="2" />
+          <circle cx="33" cy="54" r="2" />
+          <circle cx="43" cy="52" r="2" />
+        </g>
+      ) : null}
+
+      {condition === "storm" ? (
+        <path
+          d="M33 45l-6 10h6l-4 8 12-13h-6l5-5z"
+          fill="rgba(250,204,21,0.95)"
+        />
+      ) : null}
+
+      {condition === "fog" ? (
+        <g stroke={stroke} strokeWidth="2" strokeLinecap="round" opacity="0.9">
+          <line x1="19" y1="48" x2="47" y2="48" />
+          <line x1="16" y1="54" x2="44" y2="54" />
+        </g>
+      ) : null}
+    </svg>
+  );
+}
+
 export default function MoonNowCard({
   lat,
   lon,
@@ -46,143 +164,164 @@ export default function MoonNowCard({
   lon: number;
   tz: string;
 }) {
-  // Fetch the “now” and “today” queries. Each returns internal and external
-  // results via our updated hooks.
-  const nowQ = useLunarNow(lat, lon, tz);
-  const todayQ = useMoonToday(lat, lon, tz);
+  const summaryQ = useAstronomySummary(lat, lon, tz);
+  const weatherQ = useWeatherNow(lat, lon);
 
-  // Render loading and error states.
-  if (nowQ.isLoading || todayQ.isLoading || !nowQ.data || !todayQ.data) {
-    return <div className="p-6 rounded-2xl shadow">Loading…</div>;
-  }
-
-  if (nowQ.error || todayQ.error) {
+  if (summaryQ.error && !summaryQ.data) {
     return (
-      <div className="p-6 rounded-2xl shadow text-red-600">
+      <div className="h-full w-full rounded-2xl p-4 text-red-600 shadow">
         Failed to load lunar data.
       </div>
     );
   }
 
-  // Safe to access the data now (non-null because of guards above)
-  const now = nowQ.data!;
-  const today = todayQ.data!;
+  if (!summaryQ.data) {
+    return <div className="h-full w-full rounded-2xl p-4 shadow">Loading…</div>;
+  }
 
-  // Use internal illumination as primary source for phase visual,
-  // falling back to the external value if needed.
-  const phaseIllumPct = now.internal.illumPct ?? now.external.illumPct;
+  const summary = summaryQ.data;
+  const moon = summary.moon.current;
+  const events = summary.moon.events;
+  const weatherCondition = weatherQ.data?.condition;
+  const weatherCloudCover = weatherQ.data?.cloudCoverPct;
+  const weatherTitle = weatherCondition
+    ? `${weatherLabel(weatherCondition)}${
+        typeof weatherCloudCover === "number"
+          ? ` · ${Math.round(weatherCloudCover)}% cloud cover`
+          : ""
+      }`
+    : weatherQ.error
+      ? "Weather unavailable"
+      : "Loading weather";
+
+  const lastUpdatedLabel =
+    summaryQ.dataUpdatedAt > 0
+      ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
+      : "—";
 
   return (
-    <div className="grid gap-4 p-6 rounded-2xl shadow bg-white/5 backdrop-blur">
-      <header>
-        <h2 className="text-xl font-semibold">Moon now</h2>
-        {/* Display the local timestamp from the now hook */}
-        <p className="text-sm opacity-70">
-          {formatLocalDateTime(now.whenISO, tz)}
-        </p>
-        <span className="font-semibold">internal:</span> python_service ·{" "}
-        <span className="font-semibold">external:</span> SunCalc
+    <div className="flex h-full w-full flex-col gap-4 rounded-2xl bg-slate-950/68 p-4 shadow-xl shadow-black/30 ring-1 ring-white/12 backdrop-blur">
+      <header className="flex items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h2 className="text-xl font-semibold">Moon now</h2>
+          <p className="text-sm opacity-70">
+            {formatLocalDateTime(summary.meta.date.current_local, tz)}
+          </p>
+          <p className="text-[11px] opacity-60">
+            Source: {summary.meta.source}
+          </p>
+          <p className="text-[11px] opacity-60">
+            Updated {lastUpdatedLabel}
+            {summaryQ.isFetching ? " · updating" : ""}
+          </p>
+        </div>
+
+        <div
+          className={`shrink-0 rounded-xl border border-white/15 bg-slate-950/40 px-2 py-1 text-center ${
+            weatherQ.isFetching ? "opacity-80" : "opacity-100"
+          }`}
+          title={weatherTitle}
+        >
+          <WeatherCloudSymbol condition={weatherCondition} size={24} />
+          <div className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-200/85">
+            {weatherLabel(weatherCondition)}
+          </div>
+        </div>
       </header>
 
-      {/* Current illumination, phase, altitude and azimuth */}
-      <section className="grid grid-cols-2 gap-4">
-        {/* Phase */}
-        <div>
-          <div className="text-4xl font-bold">
-            {now.internal.illumPct}% / {now.external.illumPct}%
+      <section className="grid grid-cols-2 gap-x-4 gap-y-2">
+        <div className="space-y-0.5">
+          <div className="text-[2rem] font-bold leading-none">
+            {moon.illumination_pct}%
           </div>
-          <div className="opacity-70">illumination</div>
-          <div className="mt-1 text-xs opacity-60"></div>
+          <div className="text-sm opacity-70">illumination</div>
         </div>
-        <div>
-          <div className="flex items-center gap-4">
-            <div className="text-2xl font-semifold">
-              {today.internal.phaseName ?? today.external.phaseName ?? "-"}
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2.5">
+            <div className="text-lg font-semibold leading-tight">
+              {moon.phase_name ?? "—"}
             </div>
-            <MoonPhaseCircle illuminationPct={phaseIllumPct} />
+            <MoonPhaseCircle
+              illuminationFrac={moon.illumination_frac}
+              waxing={moon.waxing}
+              phaseAngleDeg={moon.phase_angle_deg}
+              brightLimbAngleDeg={moon.bright_limb_angle_deg}
+              size={36}
+            />
           </div>
-          <div className="opacity-70">phase</div>
-        </div>
-        {/* Altitude */}
-        <div>
-          <div className="text-2xl font-semibold">
-            {now.internal.altDeg.toFixed(1)}° / {now.external.altDeg.toFixed(1)}
-            °
-          </div>
-          <div className="opacity-70">altitude</div>
-          <div className="mt-1 text-xs opacity-60"></div>
+          <div className="text-sm opacity-70">phase</div>
         </div>
 
-        {/* Azimuth */}
-        <div>
-          <div className="text-2xl font-semibold">
-            {now.internal.azDeg.toFixed(0)}° / {now.external.azDeg.toFixed(0)}°
+        <div className="relative">
+          <div className="group inline-flex flex-col">
+            <div className="text-lg font-semibold leading-tight">
+              {moon.altitude_deg.toFixed(0)}°
+            </div>
+            <div className="text-sm opacity-70">Altitude</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+              Altitude relative to the horizon (0° = on the horizon, positive =
+              above, negative = below).
+            </div>
           </div>
-          <div className="opacity-70">azimuth</div>
-          <div className="mt-1 text-xs opacity-60"></div>
+        </div>
+
+        <div className="relative">
+          <div className="group inline-flex flex-col">
+            <div className="text-lg font-semibold leading-tight">
+              {formatAzimuthWithDirection(moon.azimuth_deg)}
+            </div>
+            <div className="text-sm opacity-70">Azimuth</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+              Azimuth is the Moon’s compass direction along the horizon,
+              measured in degrees from true north (0°), moving eastward (90°),
+              south (180°), and west (270°).
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Daily events: rise, high, set, low */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-        {/* Moonrise */}
-        <div>
-          <div className="opacity-70">Moonrise (East)</div>
-          <div>
-            {formatLocalDateTime(today.internal.rise, tz)} /{" "}
-            {formatLocalDateTime(today.external.rise, tz)}
+      <section className="grid grid-cols-2 gap-2.5 text-sm md:grid-cols-4">
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
+            {formatTimeOrDateTime(events.rise_local ?? undefined, tz)}
           </div>
-          <div className="text-xs opacity-70 mt-1">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
+            Moonrise (East)
+          </div>
+          <div className="text-[11px] leading-snug text-slate-300/70">
             Previous moonrise:{" "}
-            {formatLocalDateTime(today.internal.prevRise, tz)} /{" "}
-            {formatLocalDateTime(today.external.prevRise, tz)}
-          </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+            {formatTimeOrDateTime(events.previous_rise_local ?? undefined, tz)}
           </div>
         </div>
 
-        {/* High moon */}
-        <div>
-          <div className="opacity-70">High moon</div>
-          <div>
-            {formatLocalDateTime(today.internal.highMoon, tz)} /{" "}
-            {formatLocalDateTime(today.external.highMoon, tz)}
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
+            {formatTimeOrDateTime(events.high_moon_local ?? undefined, tz)}
           </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
+            High moon
           </div>
         </div>
 
-        {/* Moonset */}
-        <div>
-          <div className="opacity-70">Moonset (West)</div>
-          <div>
-            {formatLocalDateTime(today.internal.set, tz)} /{" "}
-            {formatLocalDateTime(today.external.set, tz)}
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
+            {formatTimeOrDateTime(events.set_local ?? undefined, tz)}
           </div>
-          <div className="text-xs opacity-70 mt-1">
-            Previous moonset: {formatLocalDateTime(today.internal.prevSet, tz)}{" "}
-            / {formatLocalDateTime(today.external.prevSet, tz)}
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
+            Moonset (West)
           </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+          <div className="text-[11px] leading-snug text-slate-300/70">
+            Previous moonset:{" "}
+            {formatTimeOrDateTime(events.previous_set_local ?? undefined, tz)}
           </div>
         </div>
 
-        {/* Low moon */}
-        <div>
-          <div className="opacity-70">Low moon</div>
-          <div>
-            {formatLocalDateTime(today.internal.lowMoon, tz)} /{" "}
-            {formatLocalDateTime(today.external.lowMoon, tz)}
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
+            {formatTimeOrDateTime(events.low_moon_local ?? undefined, tz)}
           </div>
-          <div className="mt-1 text-xs opacity-60">
-            <span className="font-semibold">internal:</span> python_service ·{" "}
-            <span className="font-semibold">external:</span> SunCalc
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
+            Low moon
           </div>
         </div>
       </section>

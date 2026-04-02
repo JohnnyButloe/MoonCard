@@ -2,9 +2,10 @@
 
 type Props = {
   label: string;
-  latitude: number;
-  longitude: number;
-  source: "geolocation" | "fallback" | "cache";
+  latitude?: number;
+  longitude?: number;
+  source: "current" | "home" | "saved" | "fallback";
+  onClick?: () => void;
 };
 
 export default function LocationTag({
@@ -12,15 +13,21 @@ export default function LocationTag({
   latitude,
   longitude,
   source,
+  onClick,
 }: Props) {
   return (
-    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-white">
-      <span>📍</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-3 py-1 text-xs text-white/90 backdrop-blur transition hover:border-white/20 hover:bg-slate-900/90"
+    >
+      <span aria-hidden="true">📍</span>
       <span className="font-medium">{label}</span>
       <span className="opacity-70">
-        {latitude.toFixed(3)}, {longitude.toFixed(3)}
+        {typeof latitude === "number" ? latitude.toFixed(3) : "—"},{" "}
+        {typeof longitude === "number" ? longitude.toFixed(3) : "—"}
       </span>
       <span className="opacity-60">({source})</span>
-    </div>
+    </button>
   );
 }

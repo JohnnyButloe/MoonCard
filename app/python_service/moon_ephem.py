@@ -28,6 +28,7 @@ from typing import Dict, Optional
 
 from skyfield import almanac
 from skyfield.api import Loader, wgs84
+from skyfield.trigonometry import position_angle_of
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ def _moon_geometry(
     lat_deg: float,
     lon_deg: float,
     elev_m: float = 0.0,
-) -> Dict[str, float]:
+) -> Dict[str, float | bool]:
     """
     Core Moon + Sun geometry for a single instant using Skyfield.
 
@@ -137,6 +138,8 @@ def _moon_geometry(
       - phase_angle_deg: synodic phase angle Moon–Sun (0°=New, 180°=Full)
       - illum_frac:     Illuminated fraction of the lunar disc [0,1]
       - phase_name:     Human-readable phase string
+      - moon_waxing:    True for waxing half of synodic cycle
+      - bright_limb_angle_deg: bright-limb / terminator tilt angle [0,360)
     """
     dt_utc = _ensure_utc(datetime_utc)
     t = ts.from_datetime(dt_utc)
@@ -145,8 +148,9 @@ def _moon_geometry(
     topos = wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
     observer = EARTH + topos
 
-    # Apparent topocentric position of the Moon.
+    # Apparent topocentric positions for Moon and Sun (same observer/time).
     apparent_moon = observer.at(t).observe(MOON).apparent()
+    apparent_sun = observer.at(t).observe(SUN).apparent()
 
     # Altitude / azimuth / distance.  We ask Skyfield to apply a simple
     # standard atmosphere so that low-altitude altitudes include refraction. :contentReference[oaicite:3]{index=3}
@@ -156,11 +160,16 @@ def _moon_geometry(
     )
 
     # Illuminated fraction (Meeus 0.5*(1 - cos ψ) under the hood). :contentReference[oaicite:4]{index=4}
+    # Skyfield expects a body with `.at()` here (not an Apparent position).
     illum_frac = float(apparent_moon.fraction_illuminated(SUN))
 
     # Synodic phase angle (Moon–Sun ecliptic longitude difference).
-    phase_angle_deg = float(almanac.moon_phase(eph, t).degrees)
+    phase_angle_deg = float(almanac.moon_phase(eph, t).degrees % 360.0)
     phase_name = _phase_name_from_angle(phase_angle_deg)
+    moon_waxing = phase_angle_deg < 180.0
+    bright_limb_angle_deg = float(
+        position_angle_of(apparent_moon.radec(), apparent_sun.radec()).degrees % 360.0
+    )
 
     # Skyfield already uses a modern precession–nutation model and the
     # time-dependent mean obliquity of the ecliptic internally, so we no
@@ -173,6 +182,8 @@ def _moon_geometry(
         "phase_angle_deg": phase_angle_deg,
         "illum_frac": illum_frac,
         "phase_name": phase_name,
+        "moon_waxing": moon_waxing,
+        "bright_limb_angle_deg": bright_limb_angle_deg,
     }
 
 
@@ -186,7 +197,7 @@ def moon_now(
     lat_deg: float,
     lon_deg: float,
     elev_m: float = 0.0,
-) -> Dict[str, float]:
+) -> Dict[str, object]:
     """
     Compute the Moon’s altitude, azimuth, illuminated fraction, phase angle,
     distance, and phase name for the given UTC time and observer location.
@@ -199,9 +210,19 @@ def moon_now(
         "az_deg": g["az_deg"],
         "illum_frac": g["illum_frac"],
         "phase_angle_deg": g["phase_angle_deg"],
+        "moon_illumination": g["illum_frac"],
+        "moon_phase_angle_deg": g["phase_angle_deg"],
+        "moon_bright_limb_angle_deg": g["bright_limb_angle_deg"],
+        "moon_waxing": g["moon_waxing"],
         "phase_name": g["phase_name"],
         "distance_km": g["distance_km"],
         "jd_tt": g["jd"],
+        "moon": {
+            "illumination": g["illum_frac"],
+            "waxing": g["moon_waxing"],
+            "phase_angle_deg": g["phase_angle_deg"],
+            "bright_limb_angle_deg": g["bright_limb_angle_deg"],
+        },
     }
 
 

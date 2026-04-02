@@ -1,0 +1,199 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import MoonNowCard from "./MoonCardNow";
+import LocationTag from "./LocationTag";
+import MoonAltitudeGraph from "./MoonGraph";
+import MoonPhaseCalendar from "./MoonPhaseCalendar";
+import LocationSearch from "./LocationSearch";
+import LocationOnboarding from "./LocationOnboarding";
+import {
+  LocationProvider,
+  useLocation,
+  type StoredLocation,
+  type CachedLocation,
+} from "../providers/LocationProvider";
+
+function DashboardContent({
+  initialView,
+}: {
+  initialView: "landing" | "dashboard";
+}) {
+  const router = useRouter();
+  const [isLocationEditorOpen, setIsLocationEditorOpen] = useState(false);
+  const {
+    active,
+    tz,
+    current,
+    isLocating,
+    hasCompletedOnboarding,
+    selectLocation,
+  } = useLocation();
+
+  const handleSelectLocation = (location: StoredLocation) => {
+    selectLocation(location);
+    router.push("/dashboard");
+  };
+
+  useEffect(() => {
+    if (!isLocationEditorOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsLocationEditorOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isLocationEditorOpen]);
+
+  if (initialView === "landing") {
+    return <LocationOnboarding onSelect={handleSelectLocation} />;
+  }
+
+  if (!hasCompletedOnboarding) {
+    return <LocationOnboarding onSelect={handleSelectLocation} />;
+  }
+
+  return (
+    <main className="min-h-screen bg-[#050816] text-slate-100">
+      {isLocationEditorOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm"
+          onClick={() => setIsLocationEditorOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-900/95 p-5 shadow-2xl shadow-black/50"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-100/55">
+                  Edit location
+                </p>
+                <h2 className="mt-1 text-xl font-semibold text-white/92">
+                  Change the dashboard location
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationEditorOpen(false)}
+                className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300/80 transition hover:border-white/20 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mb-5">
+              <button
+                type="button"
+                disabled={!current}
+                onClick={() => {
+                  if (!current) return;
+                  handleSelectLocation({
+                    label: current.label,
+                    latitude: current.latitude,
+                    longitude: current.longitude,
+                    tz: current.tz,
+                  });
+                  setIsLocationEditorOpen(false);
+                }}
+                className={`w-full rounded-[1.5rem] border px-4 py-3 text-left transition ${
+                  current
+                    ? "border-sky-300/30 bg-sky-300/8 text-sky-50/90 hover:border-sky-300/45 hover:bg-sky-300/12"
+                    : "cursor-not-allowed border-white/10 bg-white/3 text-slate-400/85"
+                }`}
+              >
+                <span className="block text-[11px] uppercase tracking-[0.24em] text-sky-100/55">
+                  Current location
+                </span>
+                <span className="mt-1 block text-base font-medium">
+                  {isLocating && !current
+                    ? "Locating current position..."
+                    : current?.label ?? "Current location unavailable"}
+                </span>
+              </button>
+            </div>
+
+            <LocationSearch
+              onSelect={(location) => {
+                handleSelectLocation(location);
+                setIsLocationEditorOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="relative mx-auto max-w-6xl px-6 py-8">
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 8%, rgba(56,189,248,0.07) 0%, rgba(5,8,22,0.16) 32%, rgba(5,8,22,0.92) 100%)",
+            }}
+          />
+          <div className="absolute -top-28 right-8 h-80 w-80 rounded-full bg-sky-500/12 blur-3xl" />
+          <div className="absolute left-6 top-24 h-64 w-64 rounded-full bg-cyan-400/6 blur-3xl" />
+          <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
+        </div>
+
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
+              Lunar dashboard
+            </p>
+            <h1 className="text-2xl font-semibold">Mooncard</h1>
+          </div>
+          <LocationTag
+            label={active.label}
+            latitude={active.latitude}
+            longitude={active.longitude}
+            source={active.source}
+            onClick={() => setIsLocationEditorOpen(true)}
+          />
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-12">
+          <section className="flex h-full lg:col-span-7 xl:col-span-8">
+            <MoonNowCard
+              lat={active.latitude}
+              lon={active.longitude}
+              tz={tz}
+            />
+          </section>
+          <section className="flex h-full lg:col-span-5 xl:col-span-4">
+            <div className="flex h-full w-full rounded-2xl bg-slate-950/68 p-4 ring-1 ring-white/12 backdrop-blur">
+              <MoonPhaseCalendar tz={tz} />
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-6">
+          <MoonAltitudeGraph
+            lat={active.latitude}
+            lon={active.longitude}
+            tz={tz}
+          />
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export default function DashboardClient({
+  fallback,
+  initialView = "dashboard",
+}: {
+  fallback: CachedLocation;
+  initialView?: "landing" | "dashboard";
+}) {
+  return (
+    <LocationProvider fallback={fallback}>
+      <DashboardContent initialView={initialView} />
+    </LocationProvider>
+  );
+}
