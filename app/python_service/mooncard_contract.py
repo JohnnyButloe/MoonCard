@@ -201,6 +201,10 @@ class MoonCardResponseModel(MoonCardContractModel):
     errors: list[MoonCardErrorModel] = Field(default_factory=list)
 
 
+# These reserved models make future monetization and platform phases additive:
+# caching metadata, saved locations, alerts, widgets, subscriptions, exports,
+# and partner/API surfaces can extend the contract without renaming the stable
+# core Moon/Sun/Twilight/Visibility blocks.
 class MoonCardReservedRequestContextModel(MoonCardContractModel):
     cache_key_hint: str | None = None
     saved_location_id: str | None = None

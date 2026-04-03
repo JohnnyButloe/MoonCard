@@ -4,6 +4,7 @@ import { noStoreHeaders } from "../../lib/apiUtils";
 import { fetchMoonCardUpstream } from "../../lib/mooncard/fetchMooncardUpstream";
 import {
   mapInternalRouteApiError,
+  mapMethodNotAllowedApiError,
   mapNormalizationApiError,
   mapUpstreamBadResponseApiError,
   mapUpstreamTimeoutApiError,
@@ -14,9 +15,17 @@ import { normalizeMoonCardRequest } from "../../lib/mooncard/normalizeRequest";
 import type { MoonCardApiResponse } from "../../lib/mooncard/types";
 
 export const runtime = "nodejs";
+const ALLOW_HEADER_VALUE = "POST, OPTIONS";
 
 function randomIncidentId(): string | null {
   return globalThis.crypto?.randomUUID?.() ?? null;
+}
+
+function routeHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    ...noStoreHeaders,
+    ...(extra ?? {}),
+  };
 }
 
 function logRouteError(message: string, details?: Record<string, unknown> | null) {
@@ -28,6 +37,22 @@ function logRouteError(message: string, details?: Record<string, unknown> | null
       ...(details ?? {}),
     }),
   );
+}
+
+function methodNotAllowedResponse(
+  request: NextRequest,
+): NextResponse<MoonCardApiResponse> {
+  const mapped = mapMethodNotAllowedApiError({
+    method: request.method,
+    allowed_methods: ["POST"],
+  });
+
+  return NextResponse.json(mapped.body, {
+    status: mapped.status,
+    headers: routeHeaders({
+      Allow: ALLOW_HEADER_VALUE,
+    }),
+  });
 }
 
 /**
@@ -60,7 +85,7 @@ export async function POST(
 
     return NextResponse.json(mapped.body, {
       status: mapped.status,
-      headers: noStoreHeaders,
+      headers: routeHeaders(),
     });
   }
 
@@ -69,7 +94,7 @@ export async function POST(
     if (!normalizedRequest.ok) {
       return NextResponse.json(mapValidationApiError(normalizedRequest.errors).body, {
         status: 400,
-        headers: noStoreHeaders,
+        headers: routeHeaders(),
       });
     }
 
@@ -89,7 +114,7 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: noStoreHeaders,
+            headers: routeHeaders(),
           });
         }
         case "unconfigured": {
@@ -101,7 +126,7 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: noStoreHeaders,
+            headers: routeHeaders(),
           });
         }
         case "timeout": {
@@ -113,7 +138,7 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: noStoreHeaders,
+            headers: routeHeaders(),
           });
         }
         case "bad_response":
@@ -134,7 +159,7 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: noStoreHeaders,
+            headers: routeHeaders(),
           });
         }
       }
@@ -158,7 +183,7 @@ export async function POST(
       });
       return NextResponse.json(mapped.body, {
         status: mapped.status,
-        headers: noStoreHeaders,
+        headers: routeHeaders(),
       });
     }
 
@@ -169,7 +194,9 @@ export async function POST(
       },
       {
         status: 200,
-        headers: noStoreHeaders,
+        headers: routeHeaders({
+          Allow: ALLOW_HEADER_VALUE,
+        }),
       },
     );
   } catch (error: unknown) {
@@ -188,7 +215,32 @@ export async function POST(
 
     return NextResponse.json(mapped.body, {
       status: mapped.status,
-      headers: noStoreHeaders,
+      headers: routeHeaders(),
     });
   }
+}
+
+export function GET(request: NextRequest): NextResponse<MoonCardApiResponse> {
+  return methodNotAllowedResponse(request);
+}
+
+export function PUT(request: NextRequest): NextResponse<MoonCardApiResponse> {
+  return methodNotAllowedResponse(request);
+}
+
+export function PATCH(request: NextRequest): NextResponse<MoonCardApiResponse> {
+  return methodNotAllowedResponse(request);
+}
+
+export function DELETE(request: NextRequest): NextResponse<MoonCardApiResponse> {
+  return methodNotAllowedResponse(request);
+}
+
+export function OPTIONS(): NextResponse<null> {
+  return new NextResponse(null, {
+    status: 204,
+    headers: routeHeaders({
+      Allow: ALLOW_HEADER_VALUE,
+    }),
+  });
 }

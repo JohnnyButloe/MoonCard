@@ -1,6 +1,6 @@
 import { keepPreviousData } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
-import { fetchAstronomySummary } from "../providers/pyAstronomy";
+import { fetchMoonCard } from "../providers/mooncard";
 
 export type SunEvents = {
   sunriseLocal?: string | null;
@@ -34,16 +34,16 @@ export function sunEventsQueryOptions({
     ],
     enabled,
     queryFn: async (): Promise<SunEvents> => {
-      const summary = await fetchAstronomySummary(
+      const summary = await fetchMoonCard({
         lat,
         lon,
         tz,
-        new Date().toISOString(),
+        requestOrigin: "dashboard",
         baseUrl,
-      );
+      });
       return {
-        sunriseLocal: summary.sun.events.sunrise_local,
-        sunsetLocal: summary.sun.events.sunset_local,
+        sunriseLocal: summary.sun.sunrise,
+        sunsetLocal: summary.sun.sunset,
       };
     },
     refetchInterval: 30 * 60 * 1000,

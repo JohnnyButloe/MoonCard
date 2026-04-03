@@ -48,8 +48,31 @@ function buildUpstreamError(input: {
 
 export function mapValidationApiError(
   errors: MoonCardValidationError[],
+  status = 400,
 ): MoonCardMappedApiError {
-  return buildErrorResponse(400, errors);
+  return buildErrorResponse(status, errors);
+}
+
+export function mapMethodNotAllowedApiError(input?: {
+  method?: string | null;
+  allowed_methods?: string[];
+}): MoonCardMappedApiError {
+  return mapValidationApiError(
+    [
+      {
+        type: "validation",
+        code: "invalid_request",
+        message: "MoonCard only supports POST requests at this application boundary.",
+        field: null,
+        retryable: false,
+        details: {
+          method: input?.method ?? null,
+          allowed_methods: input?.allowed_methods ?? ["POST"],
+        },
+      },
+    ],
+    405,
+  );
 }
 
 export function mapNormalizationApiError(input: {

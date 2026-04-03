@@ -63,7 +63,7 @@ export default function TwilightPhaseBar({
   if (q.error || !q.data) {
     return (
       <div className="rounded-2xl bg-white/5 p-4 text-xs opacity-70 text-center ring-1 ring-white/10 backdrop-blur">
-        Twilight unavailable (check /api/py-twilight in Network tab)
+        Twilight unavailable.
       </div>
     );
   }
@@ -78,6 +78,10 @@ export default function TwilightPhaseBar({
 
   const weightedSegments = segments
     .map((seg) => {
+      if (!seg.startLocal || !seg.endLocal || !seg.phase) {
+        return null;
+      }
+
       const segStart = new Date(seg.startLocal);
       const segEnd = new Date(seg.endLocal);
       const durationMs = segEnd.getTime() - segStart.getTime();
@@ -90,7 +94,7 @@ export default function TwilightPhaseBar({
         weight,
       };
     })
-    .filter((seg) => seg.durationMs > 0);
+    .filter((seg): seg is NonNullable<typeof seg> => seg !== null && seg.durationMs > 0);
 
   const totalWeightedMs = weightedSegments.reduce(
     (sum, seg) => sum + seg.durationMs * seg.weight,
@@ -138,7 +142,7 @@ export default function TwilightPhaseBar({
         </div>
         <div className="text-right text-xs text-sky-100/80">
           <div>
-            <span className="font-semibold capitalize">{currentPhase}</span>
+            <span className="font-semibold capitalize">{currentPhase ?? "Unknown"}</span>
           </div>
           <div className="mt-0.5 text-[11px] text-sky-100/60">
             Updated {lastUpdatedLabel}
@@ -151,7 +155,7 @@ export default function TwilightPhaseBar({
         {weightedSegments.map((seg, idx) => {
           const widthPct =
             ((seg.durationMs * seg.weight) / (totalWeightedMs || 1)) * 100;
-          const cls = PHASE_COLORS[seg.phase] || "bg-gray-600";
+          const cls = seg.phase ? PHASE_COLORS[seg.phase] || "bg-gray-600" : "bg-gray-600";
 
           return (
             <div

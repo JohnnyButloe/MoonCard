@@ -72,6 +72,9 @@ export async function fetchMoonCardUpstream(
   }
 
   const payload = parsedPayload.data;
+  // This normalized payload is the single orchestration contract between Next
+  // and Python. Future cache layers can key off this exact shape without
+  // teaching React components anything about Python transport details.
   const url = new URL(`${rootUrl}/mooncard`);
 
   try {
