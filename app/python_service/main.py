@@ -11,10 +11,12 @@ from app.python_service.moon import moon_events_for_date, MoonEvents
 
 from app.python_service.twilight import twilight_for_date
 from app.python_service.sun import sun_events_for_date, SunEvents
+from app.python_service.routes.mooncard import router as mooncard_router
 
 
 
 app = FastAPI()
+app.include_router(mooncard_router)
 
 
 @app.get("/moon/now")

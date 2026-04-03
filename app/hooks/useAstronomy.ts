@@ -2,16 +2,33 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
-  astronomySummaryQueryOptions,
   moonPhaseWindowQueryOptions,
-  type AstronomySummary,
   type MoonPhaseWindow,
 } from "../queries/astronomy";
+import {
+  moonCardQueryOptions,
+  type MoonCardResponse,
+} from "../queries/mooncard";
 
-export type { AstronomySummary, MoonPhaseWindow };
+export type { MoonCardResponse, MoonPhaseWindow };
 
-export function useAstronomySummary(lat: number, lon: number, tz: string) {
-  return useQuery<AstronomySummary>(astronomySummaryQueryOptions({ lat, lon, tz }));
+export function useMoonCard(
+  lat: number,
+  lon: number,
+  tz: string,
+  options?: {
+    label?: string | null;
+  },
+) {
+  return useQuery<MoonCardResponse>(
+    moonCardQueryOptions({
+      lat,
+      lon,
+      tz,
+      label: options?.label ?? null,
+      requestOrigin: "dashboard",
+    }),
+  );
 }
 
 export function useMoonPhaseWindow(
@@ -23,3 +40,5 @@ export function useMoonPhaseWindow(
     moonPhaseWindowQueryOptions({ tz, startDateIso, windowDays }),
   );
 }
+
+export const useAstronomySummary = useMoonCard;

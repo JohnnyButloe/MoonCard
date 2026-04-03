@@ -1,15 +1,16 @@
 "use client";
 
 import { useId } from "react";
-import { formatInTimeZone } from "date-fns-tz";
-import { useAstronomySummary } from "../hooks/useAstronomy";
-import type { AstronomySummary } from "../providers/pyAstronomy";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+
+import { useMoonCard } from "../hooks/useAstronomy";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 const VIEW_W = 160;
 const VIEW_H = 40;
 const HORIZON_Y = 24;
 const AMP = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
 
@@ -20,7 +21,7 @@ type SkyStripe = {
   width: number;
   zenith: RGB;
   horizon: RGB;
-  sunAltDeg: number;
+  phase: TwilightPhase;
 };
 
 type Star = {
@@ -38,7 +39,11 @@ type Cloud = {
   opacity: number;
 };
 
-type SunPathSample = AstronomySummary["sun"]["path"]["samples"][number];
+type TwilightBand = {
+  startMs: number;
+  endMs: number;
+  phase: TwilightPhase;
+};
 
 const TWILIGHT_BAND_COLOR: Record<TwilightPhase, string> = {
   day: "#8ec9ff",
@@ -64,6 +69,45 @@ const TWILIGHT_LEGEND_ORDER: TwilightPhase[] = [
   "dark",
 ];
 
+const SKY_PHASE_COLORS: Record<TwilightPhase, { zenith: RGB; horizon: RGB }> = {
+  day: {
+    zenith: { r: 35, g: 90, b: 165 },
+    horizon: { r: 170, g: 210, b: 235 },
+  },
+  civil: {
+    zenith: { r: 28, g: 60, b: 128 },
+    horizon: { r: 245, g: 188, b: 126 },
+  },
+  nautical: {
+    zenith: { r: 18, g: 34, b: 80 },
+    horizon: { r: 104, g: 78, b: 154 },
+  },
+  astronomical: {
+    zenith: { r: 8, g: 12, b: 28 },
+    horizon: { r: 34, g: 24, b: 60 },
+  },
+  dark: {
+    zenith: { r: 3, g: 4, b: 12 },
+    horizon: { r: 3, g: 4, b: 12 },
+  },
+};
+
+const PHASE_DARKNESS: Record<TwilightPhase, number> = {
+  day: 0,
+  civil: 0.08,
+  nautical: 0.45,
+  astronomical: 0.85,
+  dark: 1,
+};
+
+const PHASE_DAYLIGHT: Record<TwilightPhase, number> = {
+  day: 1,
+  civil: 0.72,
+  nautical: 0.2,
+  astronomical: 0.05,
+  dark: 0,
+};
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -80,82 +124,6 @@ function rgbToCss(c: RGB, a = 1) {
 function noise(seed: number) {
   const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
   return value - Math.floor(value);
-}
-
-const SKY_KEYS_ASC = [
-  { alt: -40, zenith: { r: 3, g: 4, b: 12 }, horizon: { r: 3, g: 4, b: 12 } },
-  {
-    alt: -18,
-    zenith: { r: 6, g: 8, b: 22 },
-    horizon: { r: 25, g: 20, b: 40 },
-  },
-  {
-    alt: -12,
-    zenith: { r: 12, g: 18, b: 45 },
-    horizon: { r: 120, g: 80, b: 140 },
-  },
-  {
-    alt: -6,
-    zenith: { r: 20, g: 35, b: 70 },
-    horizon: { r: 255, g: 140, b: 80 },
-  },
-  {
-    alt: 5,
-    zenith: { r: 30, g: 55, b: 120 },
-    horizon: { r: 240, g: 190, b: 120 },
-  },
-  {
-    alt: 30,
-    zenith: { r: 25, g: 70, b: 145 },
-    horizon: { r: 140, g: 195, b: 230 },
-  },
-  {
-    alt: 80,
-    zenith: { r: 35, g: 90, b: 165 },
-    horizon: { r: 170, g: 210, b: 235 },
-  },
-];
-
-function skyColorsForSunAlt(sunAltDeg: number) {
-  const keys = SKY_KEYS_ASC;
-  if (!keys.length) {
-    return {
-      zenith: { r: 8, g: 12, b: 24 },
-      horizon: { r: 8, g: 12, b: 24 },
-    };
-  }
-  if (!Number.isFinite(sunAltDeg)) {
-    return { zenith: keys[0].zenith, horizon: keys[0].horizon };
-  }
-
-  const first = keys[0];
-  const last = keys[keys.length - 1];
-  const clampedAlt = Math.max(first.alt, Math.min(last.alt, sunAltDeg));
-
-  if (clampedAlt <= first.alt) {
-    return { zenith: first.zenith, horizon: first.horizon };
-  }
-  if (clampedAlt >= last.alt) {
-    return { zenith: last.zenith, horizon: last.horizon };
-  }
-
-  let k = 0;
-  while (k < keys.length - 2 && clampedAlt > keys[k + 1].alt) {
-    k += 1;
-  }
-
-  const a = keys[k];
-  const b = keys[k + 1];
-  const denom = b.alt - a.alt;
-  if (!Number.isFinite(denom) || denom === 0) {
-    return { zenith: a.zenith, horizon: a.horizon };
-  }
-  const t = clamp01((clampedAlt - a.alt) / denom);
-
-  return {
-    zenith: lerpRgb(a.zenith, b.zenith, t),
-    horizon: lerpRgb(a.horizon, b.horizon, t),
-  };
 }
 
 function normalizeTwilightPhase(phase?: string | null): TwilightPhase {
@@ -191,19 +159,88 @@ function buildCurvePath(samples = 200) {
   return d.trim();
 }
 
-function buildSkyStripes(samples: SunPathSample[]): SkyStripe[] {
-  if (!samples.length) return [];
-  const count = Math.max(2, samples.length);
-  const colW = VIEW_W / (count - 1);
+function toUtcMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
 
-  return samples.map((sample, index) => {
-    const colors = skyColorsForSunAlt(sample.altitude_deg);
+function nextDateIso(dateIso: string): string {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day));
+  next.setUTCDate(next.getUTCDate() + 1);
+
+  const nextYear = next.getUTCFullYear();
+  const nextMonth = String(next.getUTCMonth() + 1).padStart(2, "0");
+  const nextDay = String(next.getUTCDate()).padStart(2, "0");
+
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+function timeToX(ms: number, dayStartMs: number, dayEndMs: number): number {
+  const span = Math.max(1, dayEndMs - dayStartMs);
+  return clamp01((ms - dayStartMs) / span) * VIEW_W;
+}
+
+function buildTwilightBands(input: {
+  dayStartMs: number;
+  dayEndMs: number;
+  fallbackPhase: TwilightPhase;
+  segments: Array<{
+    phase: string | null;
+    start: string | null;
+    end: string | null;
+  }>;
+}): TwilightBand[] {
+  const bands = input.segments
+    .map((segment) => ({
+      startMs: toUtcMs(segment.start),
+      endMs: toUtcMs(segment.end),
+      phase: normalizeTwilightPhase(segment.phase),
+    }))
+    .filter(
+      (segment): segment is TwilightBand =>
+        segment.startMs !== null &&
+        segment.endMs !== null &&
+        segment.endMs > segment.startMs,
+    )
+    .map((segment) => ({
+      startMs: Math.max(input.dayStartMs, Math.min(input.dayEndMs, segment.startMs)),
+      endMs: Math.max(input.dayStartMs, Math.min(input.dayEndMs, segment.endMs)),
+      phase: segment.phase,
+    }))
+    .filter((segment) => segment.endMs > segment.startMs)
+    .sort((a, b) => a.startMs - b.startMs);
+
+  if (bands.length > 0) {
+    return bands;
+  }
+
+  return [
+    {
+      startMs: input.dayStartMs,
+      endMs: input.dayEndMs,
+      phase: input.fallbackPhase,
+    },
+  ];
+}
+
+function buildSkyStripes(
+  bands: TwilightBand[],
+  dayStartMs: number,
+  dayEndMs: number,
+): SkyStripe[] {
+  return bands.map((band) => {
+    const colors = SKY_PHASE_COLORS[band.phase];
+    const x = timeToX(band.startMs, dayStartMs, dayEndMs);
+    const endX = timeToX(band.endMs, dayStartMs, dayEndMs);
+
     return {
-      x: index * colW,
-      width: colW + 1,
+      x,
+      width: Math.max(0.8, endX - x),
       zenith: colors.zenith,
       horizon: colors.horizon,
-      sunAltDeg: sample.altitude_deg,
+      phase: band.phase,
     };
   });
 }
@@ -213,18 +250,21 @@ function buildStars(stripes: SkyStripe[]): Star[] {
 
   for (let i = 0; i < stripes.length; i += 1) {
     const stripe = stripes[i];
-    if (stripe.sunAltDeg > -8) continue;
+    const darkness = PHASE_DARKNESS[stripe.phase];
+    if (darkness < 0.35) continue;
 
-    const darkness = clamp01((-stripe.sunAltDeg - 8) / 20);
-    const chance = 0.12 + darkness * 0.24;
-    if (noise(i + 11) > chance) continue;
+    const starCount = Math.max(1, Math.round(2 + darkness * 5));
+    for (let j = 0; j < starCount; j += 1) {
+      const seed = i * 17 + j;
+      if (noise(seed + 11) > 0.82) continue;
 
-    stars.push({
-      x: stripe.x + stripe.width * noise(i + 31),
-      y: 2 + noise(i + 59) * (HORIZON_Y * 0.62),
-      r: 0.1 + noise(i + 79) * 0.18,
-      opacity: 0.35 + darkness * 0.45 + noise(i + 101) * 0.08,
-    });
+      stars.push({
+        x: stripe.x + stripe.width * noise(seed + 31),
+        y: 2 + noise(seed + 59) * (HORIZON_Y * 0.62),
+        r: 0.1 + noise(seed + 79) * 0.18,
+        opacity: 0.35 + darkness * 0.45 + noise(seed + 101) * 0.08,
+      });
+    }
   }
 
   return stars;
@@ -233,22 +273,66 @@ function buildStars(stripes: SkyStripe[]): Star[] {
 function buildClouds(stripes: SkyStripe[]): Cloud[] {
   const clouds: Cloud[] = [];
 
-  for (let i = 0; i < stripes.length; i += 10) {
+  for (let i = 0; i < stripes.length; i += 1) {
     const stripe = stripes[i];
-    if (stripe.sunAltDeg < -3) continue;
+    const daylight = PHASE_DAYLIGHT[stripe.phase];
+    if (daylight < 0.25) continue;
     if (noise(i + 211) > 0.42) continue;
 
-    const daylight = clamp01((stripe.sunAltDeg + 3) / 24);
     clouds.push({
-      x: stripe.x + stripe.width * 0.5,
-      y: 4 + noise(i + 223) * (HORIZON_Y * 0.42),
-      width: 7 + noise(i + 227) * 10,
-      height: 1.6 + noise(i + 229) * 2.8,
-      opacity: 0.05 + daylight * 0.08 + noise(i + 233) * 0.03,
+      x: stripe.x + stripe.width * (0.25 + noise(i + 223) * 0.5),
+      y: 4 + noise(i + 227) * (HORIZON_Y * 0.42),
+      width: 7 + noise(i + 229) * 10,
+      height: 1.6 + noise(i + 233) * 2.8,
+      opacity: 0.04 + daylight * 0.08 + noise(i + 239) * 0.03,
     });
   }
 
   return clouds;
+}
+
+function buildCyclePosition(input: {
+  nowMs: number;
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number | null;
+  setMs: number | null;
+  isUp: boolean | null;
+}): number {
+  const daySpan = Math.max(1, input.dayEndMs - input.dayStartMs);
+  const nowClamped = Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.nowMs));
+  const fallback = clamp01((nowClamped - input.dayStartMs) / daySpan);
+
+  const riseMs =
+    input.riseMs === null
+      ? null
+      : Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.riseMs));
+  const setMs =
+    input.setMs === null
+      ? null
+      : Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.setMs));
+
+  if (riseMs !== null && setMs !== null && setMs > riseMs) {
+    if (nowClamped <= riseMs) {
+      return clamp01((nowClamped - input.dayStartMs) / Math.max(1, riseMs - input.dayStartMs)) * 0.25;
+    }
+
+    if (nowClamped <= setMs) {
+      return 0.25 + ((nowClamped - riseMs) / Math.max(1, setMs - riseMs)) * 0.5;
+    }
+
+    return 0.75 + ((nowClamped - setMs) / Math.max(1, input.dayEndMs - setMs)) * 0.25;
+  }
+
+  if (input.isUp === true) {
+    return 0.5;
+  }
+
+  if (input.isUp === false) {
+    return fallback < 0.5 ? 0.12 : 0.88;
+  }
+
+  return fallback;
 }
 
 const CURVE_PATH = buildCurvePath(220);
@@ -257,103 +341,62 @@ export default function MoonAltitudeGraph({
   lat,
   lon,
   tz,
+  label = null,
 }: {
   lat: number;
   lon: number;
   tz: string;
+  label?: string | null;
 }) {
-  const summaryQ = useAstronomySummary(lat, lon, tz);
+  const summaryQ = useMoonCard(lat, lon, tz, { label });
   const idPrefix = useId().replace(/:/g, "-");
 
   if (!summaryQ.data || summaryQ.error) return null;
 
   const summary = summaryQ.data;
-  const now = new Date(summary.meta.date.current_local);
+  const now = new Date(summary.meta.timestamp_iso);
   const nowMs = now.getTime();
 
-  const riseIso = summary.moon.events.rise_local ?? undefined;
-  const setIso = summary.moon.events.set_local ?? undefined;
-  const rise = riseIso ? new Date(riseIso) : null;
-  const set = setIso ? new Date(setIso) : null;
-  const prevSetIso = summary.moon.events.previous_set_local ?? undefined;
-  const nextRiseIso = summary.moon.events.rise_local ?? undefined;
+  const localDate = summary.meta.requested_datetime.date;
+  const dayStartMs = fromZonedTime(`${localDate}T00:00:00`, tz).getTime();
+  const dayEndMs = fromZonedTime(`${nextDateIso(localDate)}T00:00:00`, tz).getTime();
 
-  let cycleT = 0.25;
-  if (
-    prevSetIso &&
-    nextRiseIso &&
-    Number.isFinite(new Date(prevSetIso).getTime()) &&
-    Number.isFinite(new Date(nextRiseIso).getTime())
-  ) {
-    const prevSetDate = new Date(prevSetIso);
-    const nextRiseDate = new Date(nextRiseIso);
-    if (
-      now.getTime() >= prevSetDate.getTime() &&
-      now.getTime() <= nextRiseDate.getTime()
-    ) {
-      const span = nextRiseDate.getTime() - prevSetDate.getTime();
-      const pct = span > 0 ? (now.getTime() - prevSetDate.getTime()) / span : 0;
-      cycleT = 0.75 + pct * 0.25;
-    } else if (rise && set) {
-      const span = set.getTime() - rise.getTime();
-      if (span > 0) {
-        const pad = span / 2;
-        const start = rise.getTime() - pad;
-        const end = set.getTime() + pad;
-        const total = end - start;
-        if (total > 0) cycleT = (now.getTime() - start) / total;
-      }
-    }
-  } else if (rise && set) {
-    const span = set.getTime() - rise.getTime();
-    if (span > 0) {
-      const pad = span / 2;
-      const start = rise.getTime() - pad;
-      const end = set.getTime() + pad;
-      const total = end - start;
-      if (total > 0) cycleT = (now.getTime() - start) / total;
-    }
-  }
-  cycleT = clamp01(cycleT);
+  const twilightPhase = normalizeTwilightPhase(summary.twilight.current_phase);
+  const twilightLabel = TWILIGHT_LABEL[twilightPhase];
+  const twilightBands = buildTwilightBands({
+    dayStartMs,
+    dayEndMs,
+    fallbackPhase: twilightPhase,
+    // The route keeps raw twilight segment instants stable so the UI can build
+    // visual timelines without learning Python-internal field names.
+    segments: summary.twilight.segments,
+  });
 
-  const sunPathStart = new Date(summary.sun.path.window_start_local).getTime();
-  const sunPathEnd = new Date(summary.sun.path.window_end_local).getTime();
-  let sunCycleT = 0.25;
-  if (
-    Number.isFinite(sunPathStart) &&
-    Number.isFinite(sunPathEnd) &&
-    sunPathEnd > sunPathStart
-  ) {
-    sunCycleT = (nowMs - sunPathStart) / (sunPathEnd - sunPathStart);
-  }
-  sunCycleT = clamp01(sunCycleT);
+  const cycleT = buildCyclePosition({
+    nowMs,
+    dayStartMs,
+    dayEndMs,
+    riseMs: toUtcMs(summary.moon.moonrise),
+    setMs: toUtcMs(summary.moon.moonset),
+    isUp: summary.moon.is_up,
+  });
+  const sunCycleT = buildCyclePosition({
+    nowMs,
+    dayStartMs,
+    dayEndMs,
+    riseMs: toUtcMs(summary.sun.sunrise),
+    setMs: toUtcMs(summary.sun.sunset),
+    isUp: summary.sun.is_up,
+  });
 
   const dotX = cycleT * VIEW_W;
   const dotY = yOnCurve(cycleT);
   const sunDotX = sunCycleT * VIEW_W;
   const sunDotY = yOnCurve(sunCycleT);
 
-  const moonMarker = summary.moon.current;
-  const twilightPhase = normalizeTwilightPhase(summary.twilight.current_phase);
-  const twilightLabel = TWILIGHT_LABEL[twilightPhase];
-
-  const skyStripes = buildSkyStripes(summary.sun.path.samples);
+  const skyStripes = buildSkyStripes(twilightBands, dayStartMs, dayEndMs);
   const stars = buildStars(skyStripes);
   const clouds = buildClouds(skyStripes);
-
-  const twilightBands = summary.twilight.segments
-    .map((segment) => ({
-      startMs: new Date(segment.start_local).getTime(),
-      endMs: new Date(segment.end_local).getTime(),
-      phase: normalizeTwilightPhase(segment.phase),
-    }))
-    .filter(
-      (segment) =>
-        Number.isFinite(segment.startMs) &&
-        Number.isFinite(segment.endMs) &&
-        segment.endMs > segment.startMs,
-    )
-    .sort((a, b) => a.startMs - b.startMs);
 
   const nextPhaseStartLabel = TWILIGHT_LEGEND_ORDER.reduce(
     (acc, phase) => {
@@ -368,22 +411,18 @@ export default function MoonAltitudeGraph({
       }
 
       const upcoming = starts.find((startMs) => startMs >= nowMs);
-      const nextStartMs = upcoming ?? starts[0] + 24 * 60 * 60 * 1000;
+      const nextStartMs = upcoming ?? starts[0] + DAY_MS;
       acc[phase] = formatInTimeZone(new Date(nextStartMs), tz, "h:mm a");
       return acc;
     },
     {} as Record<TwilightPhase, string>,
   );
 
-  const sunriseLegendIso =
-    summary.twilight.sun_events.sunrise_local ?? summary.sun.events.sunrise_local ?? null;
-  const sunsetLegendIso =
-    summary.twilight.sun_events.sunset_local ?? summary.sun.events.sunset_local ?? null;
-  const sunriseLegendLabel = sunriseLegendIso
-    ? formatInTimeZone(new Date(sunriseLegendIso), tz, "h:mm a")
+  const sunriseLegendLabel = summary.sun.sunrise
+    ? formatInTimeZone(new Date(summary.sun.sunrise), tz, "h:mm a")
     : "—";
-  const sunsetLegendLabel = sunsetLegendIso
-    ? formatInTimeZone(new Date(sunsetLegendIso), tz, "h:mm a")
+  const sunsetLegendLabel = summary.sun.sunset
+    ? formatInTimeZone(new Date(summary.sun.sunset), tz, "h:mm a")
     : "—";
 
   const lastUpdatedLabel = summaryQ.dataUpdatedAt
@@ -424,39 +463,22 @@ export default function MoonAltitudeGraph({
               <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
             </clipPath>
 
-            <filter
-              id={auraBlurId}
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
+            <filter id={auraBlurId} x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="10" />
             </filter>
 
-            <filter
-              id={cloudBlurId}
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
+            <filter id={cloudBlurId} x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="1.2" />
             </filter>
 
-            <filter
-              id={starGlowId}
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
+            <filter id={starGlowId} x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="0.12" />
             </filter>
 
             {skyStripes.map((stripe, idx) => {
               const gradId = `${idPrefix}-sky-${idx}`;
               const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
+
               return (
                 <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
@@ -593,10 +615,8 @@ export default function MoonAltitudeGraph({
                 cy={dotY}
                 r={2.25}
                 size={16}
-                illuminationFrac={moonMarker.illumination_frac}
-                waxing={moonMarker.waxing}
-                phaseAngleDeg={moonMarker.phase_angle_deg}
-                brightLimbAngleDeg={moonMarker.bright_limb_angle_deg}
+                illuminationFrac={summary.moon.illumination_fraction ?? undefined}
+                phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
               />
               <circle cx={sunDotX} cy={sunDotY} r="2" fill="#fde047" />
             </g>

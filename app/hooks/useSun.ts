@@ -1,17 +1,17 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { astronomySummaryQueryOptions } from "../queries/astronomy";
+import { moonCardQueryOptions } from "../queries/mooncard";
 import type { SunEvents } from "../queries/sun";
 
 export type { SunEvents };
 
 export function useSunToday(lat: number, lon: number, tz: string) {
   return useQuery({
-    ...astronomySummaryQueryOptions({ lat, lon, tz }),
+    ...moonCardQueryOptions({ lat, lon, tz, requestOrigin: "dashboard" }),
     select: (summary): SunEvents => ({
-      sunriseLocal: summary.sun.events.sunrise_local,
-      sunsetLocal: summary.sun.events.sunset_local,
+      sunriseLocal: summary.sun.sunrise,
+      sunsetLocal: summary.sun.sunset,
     }),
   });
 }

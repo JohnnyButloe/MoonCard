@@ -163,6 +163,7 @@ function DashboardContent({
               lat={active.latitude}
               lon={active.longitude}
               tz={tz}
+              label={active.label}
             />
           </section>
           <section className="flex h-full lg:col-span-5 xl:col-span-4">
@@ -177,6 +178,7 @@ function DashboardContent({
             lat={active.latitude}
             lon={active.longitude}
             tz={tz}
+            label={active.label}
           />
         </section>
       </div>

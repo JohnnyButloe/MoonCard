@@ -1,19 +1,16 @@
 import { keepPreviousData } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
-import { fetchAstronomySummary } from "../providers/pyAstronomy";
+import { fetchMoonCard } from "../providers/mooncard";
 
 export type LunarNowResult = {
   whenISO: string;
   internal: {
-    altDeg: number;
-    azDeg: number;
-    illumPct: number;
-    illumination: number;
-    waxing: boolean;
-    phaseAngleDeg: number;
-    brightLimbAngleDeg: number;
+    altDeg: number | null;
+    azDeg: number | null;
+    illumPct: number | null;
+    illumination: number | null;
+    phaseAngleDeg: number | null;
     phaseName?: string | null;
-    tiltDeg?: number;
   };
 };
 
@@ -58,26 +55,23 @@ export function lunarNowQueryOptions({
     ],
     enabled,
     queryFn: async (): Promise<LunarNowResult> => {
-      const summary = await fetchAstronomySummary(
+      const summary = await fetchMoonCard({
         lat,
         lon,
         tz,
-        new Date().toISOString(),
+        requestOrigin: "dashboard",
         baseUrl,
-      );
-      const moon = summary.moon.current;
+      });
+      const moon = summary.moon;
       return {
-        whenISO: summary.meta.date.current_local,
+        whenISO: summary.meta.timestamp_iso,
         internal: {
           altDeg: moon.altitude_deg,
           azDeg: moon.azimuth_deg,
-          illumPct: moon.illumination_pct,
-          illumination: moon.illumination_frac,
-          waxing: moon.waxing,
+          illumPct: moon.illumination_percent,
+          illumination: moon.illumination_fraction,
           phaseAngleDeg: moon.phase_angle_deg,
-          brightLimbAngleDeg: moon.bright_limb_angle_deg,
           phaseName: moon.phase_name,
-          tiltDeg: moon.bright_limb_angle_deg - 270,
         },
       };
     },
@@ -109,22 +103,22 @@ export function moonTodayQueryOptions({
     ],
     enabled,
     queryFn: async (): Promise<MoonEventsResult> => {
-      const summary = await fetchAstronomySummary(
+      const summary = await fetchMoonCard({
         lat,
         lon,
         tz,
-        new Date().toISOString(),
+        requestOrigin: "dashboard",
         baseUrl,
-      );
+      });
       return {
         internal: {
-          rise: summary.moon.events.rise_local,
-          set: summary.moon.events.set_local,
-          highMoon: summary.moon.events.high_moon_local,
-          lowMoon: summary.moon.events.low_moon_local,
-          phaseName: summary.moon.current.phase_name,
-          prevRise: summary.moon.events.previous_rise_local,
-          prevSet: summary.moon.events.previous_set_local,
+          rise: summary.moon.moonrise,
+          set: summary.moon.moonset,
+          highMoon: summary.moon.high_moon,
+          lowMoon: summary.moon.low_moon,
+          phaseName: summary.moon.phase_name,
+          prevRise: null,
+          prevSet: null,
         },
       };
     },

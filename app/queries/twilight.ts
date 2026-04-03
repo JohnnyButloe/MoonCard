@@ -1,16 +1,15 @@
 import { keepPreviousData } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
-import { fetchAstronomySummary } from "../providers/pyAstronomy";
+import { fetchMoonCard } from "../providers/mooncard";
 
 export interface TwilightSegment {
-  phase: string;
-  startLocal: string;
-  endLocal: string;
+  phase: string | null;
+  startLocal: string | null;
+  endLocal: string | null;
 }
 
 export interface TwilightData {
-  timezoneOffset?: string;
-  currentPhase: string;
+  currentPhase: string | null;
   nextTransitionLocal?: string | null;
   segments: TwilightSegment[];
   sunEvents?: {
@@ -46,25 +45,24 @@ export function twilightQueryOptions({
     ],
     enabled,
     queryFn: async (): Promise<TwilightData> => {
-      const summary = await fetchAstronomySummary(
+      const summary = await fetchMoonCard({
         lat,
         lon,
         tz,
-        new Date().toISOString(),
+        requestOrigin: "dashboard",
         baseUrl,
-      );
+      });
       return {
-        timezoneOffset: summary.twilight.timezone_offset,
         currentPhase: summary.twilight.current_phase,
-        nextTransitionLocal: summary.twilight.next_transition_local,
+        nextTransitionLocal: summary.twilight.next_transition,
         segments: summary.twilight.segments.map((segment) => ({
           phase: segment.phase,
-          startLocal: segment.start_local,
-          endLocal: segment.end_local,
+          startLocal: segment.start,
+          endLocal: segment.end,
         })),
         sunEvents: {
-          sunriseLocal: summary.twilight.sun_events.sunrise_local,
-          sunsetLocal: summary.twilight.sun_events.sunset_local,
+          sunriseLocal: summary.sun.sunrise,
+          sunsetLocal: summary.sun.sunset,
         },
       };
     },

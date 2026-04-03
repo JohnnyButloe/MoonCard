@@ -20,6 +20,14 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## MoonCard Architecture
+
+The normalized MoonCard data path is documented in
+[`app/lib/mooncard/README.md`](app/lib/mooncard/README.md).
+That note explains the canonical request/response contracts, deterministic
+date/time normalization, the Next.js application boundary, and the Python
+calculation-service role.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
