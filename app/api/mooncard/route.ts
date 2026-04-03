@@ -9,6 +9,7 @@ import {
   mapUpstreamTimeoutApiError,
   mapValidationApiError,
 } from "../../lib/mooncard/mapApiError";
+import { normalizeMoonCardResponse } from "../../lib/mooncard/normalizeResponse";
 import { normalizeMoonCardRequest } from "../../lib/mooncard/normalizeRequest";
 import type { MoonCardApiResponse } from "../../lib/mooncard/types";
 
@@ -139,10 +140,32 @@ export async function POST(
       }
     }
 
+    const normalizedResponse = normalizeMoonCardResponse(
+      upstreamResult.data,
+      normalizedRequest.value,
+    );
+    if (!normalizedResponse.ok) {
+      logRouteError("response-normalization-failed", {
+        details: normalizedResponse.errors,
+      });
+      const primaryError = normalizedResponse.errors[0];
+      const mapped = mapNormalizationApiError({
+        message: primaryError?.message ?? "MoonCard response normalization failed.",
+        stage: primaryError?.stage ?? "python_response",
+        details: {
+          errors: normalizedResponse.errors,
+        },
+      });
+      return NextResponse.json(mapped.body, {
+        status: mapped.status,
+        headers: noStoreHeaders,
+      });
+    }
+
     return NextResponse.json(
       {
         ok: true,
-        data: upstreamResult.data,
+        data: normalizedResponse.value,
       },
       {
         status: 200,
