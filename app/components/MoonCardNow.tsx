@@ -210,73 +210,90 @@ export default function MoonNowCard({
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
       : "—";
 
+  const eventItems = [
+    {
+      label: "Moonrise (East)",
+      value: formatTimeOrDateTime(moon.moonrise ?? undefined, tz),
+    },
+    {
+      label: "High moon",
+      value: formatTimeOrDateTime(moon.high_moon ?? undefined, tz),
+    },
+    {
+      label: "Moonset (West)",
+      value: formatTimeOrDateTime(moon.moonset ?? undefined, tz),
+    },
+    {
+      label: "Low moon",
+      value: formatTimeOrDateTime(moon.low_moon ?? undefined, tz),
+    },
+  ];
+
   return (
-    <div className="flex h-full w-full flex-col gap-4 rounded-2xl bg-slate-950/68 p-4 shadow-xl shadow-black/30 ring-1 ring-white/12 backdrop-blur">
+    <div className="flex h-full w-full flex-col gap-2.5 rounded-2xl bg-slate-950/68 p-3.5 shadow-xl shadow-black/30 ring-1 ring-white/12 backdrop-blur">
       <header className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <h2 className="text-xl font-semibold">Moon now</h2>
-          <p className="text-sm opacity-70">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-base font-semibold tracking-tight text-slate-50">
+            Moon now
+          </h2>
+          <p className="text-xs text-slate-300/75">
             {formatLocalDateTime(summary.meta.timestamp_iso, tz)}
-          </p>
-          <p className="text-[11px] opacity-60">
-            Source: {summary.meta.calculation_source}
-          </p>
-          <p className="text-[11px] opacity-60">
-            Updated {lastUpdatedLabel}
-            {summaryQ.isFetching ? " · updating" : ""}
           </p>
         </div>
 
         <div
-          className={`shrink-0 rounded-xl border border-white/15 bg-slate-950/40 px-2 py-1 text-center ${
+          className={`flex shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-slate-950/40 px-2.5 py-1.5 ${
             weatherQ.isFetching ? "opacity-80" : "opacity-100"
           }`}
+          aria-label={weatherTitle}
           title={weatherTitle}
         >
-          <WeatherCloudSymbol condition={weatherCondition} size={24} />
-          <div className="mt-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-200/85">
-            {weatherLabel(weatherCondition)}
+          <WeatherCloudSymbol condition={weatherCondition} size={22} />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-300/65">
+              Weather
+            </div>
+            <div className="text-xs font-medium leading-tight text-slate-100">
+              {weatherLabel(weatherCondition)}
+            </div>
           </div>
         </div>
       </header>
 
-      <section className="grid grid-cols-2 gap-x-4 gap-y-2">
-        <div className="space-y-0.5">
-          <div className="text-[2rem] font-bold leading-none">{formatPercent(moon.illumination_percent)}</div>
-          <div className="text-sm opacity-70">illumination</div>
-        </div>
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2.5">
-            <div className="text-lg font-semibold leading-tight">
-              {moon.phase_name ?? "—"}
-            </div>
-            <MoonPhaseCircle
-              illuminationFrac={moon.illumination_fraction ?? undefined}
-              phaseAngleDeg={moon.phase_angle_deg ?? undefined}
-              size={36}
-            />
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-3">
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+            Illumination
           </div>
-          <div className="text-sm opacity-70">phase</div>
+          <div className="mt-1 text-2xl font-semibold leading-none text-slate-50">
+            {formatPercent(moon.illumination_percent)}
+          </div>
         </div>
 
-        <div className="relative">
-          <div className="group inline-flex flex-col">
-            <div className="text-lg font-semibold leading-tight">{formatDegrees(moon.altitude_deg)}</div>
-            <div className="text-sm opacity-70">Altitude</div>
-            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+              Altitude
+            </div>
+            <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
+              {formatDegrees(moon.altitude_deg)}
+            </div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
               Altitude relative to the horizon (0° = on the horizon, positive =
               above, negative = below).
             </div>
           </div>
         </div>
 
-        <div className="relative">
-          <div className="group inline-flex flex-col">
-            <div className="text-lg font-semibold leading-tight">
+        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 md:col-span-1">
+          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+              Azimuth
+            </div>
+            <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
               {formatAzimuthWithDirection(moon.azimuth_deg)}
             </div>
-            <div className="text-sm opacity-70">Azimuth</div>
-            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover:opacity-100">
+            <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100 md:left-0 md:right-auto">
               Azimuth is the Moon’s compass direction along the horizon,
               measured in degrees from true north (0°), moving eastward (90°),
               south (180°), and west (270°).
@@ -285,49 +302,47 @@ export default function MoonNowCard({
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2.5 text-sm md:grid-cols-4">
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
-            {formatTimeOrDateTime(moon.moonrise ?? undefined, tz)}
+      <section className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+            Current phase
           </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
-            Moonrise (East)
-          </div>
-          <div className="text-[11px] leading-snug text-slate-300/70">
-            Previous moonrise: —
+          <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
+            {moon.phase_name ?? "—"}
           </div>
         </div>
-
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
-            {formatTimeOrDateTime(moon.high_moon ?? undefined, tz)}
-          </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
-            High moon
-          </div>
-        </div>
-
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
-            {formatTimeOrDateTime(moon.moonset ?? undefined, tz)}
-          </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
-            Moonset (West)
-          </div>
-          <div className="text-[11px] leading-snug text-slate-300/70">
-            Previous moonset: —
-          </div>
-        </div>
-
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold leading-tight text-slate-100 md:text-base">
-            {formatTimeOrDateTime(moon.low_moon ?? undefined, tz)}
-          </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-100/60">
-            Low moon
-          </div>
+        <div className="shrink-0 rounded-full border border-white/10 bg-slate-950/55 p-1.5">
+          <MoonPhaseCircle
+            illuminationFrac={moon.illumination_fraction ?? undefined}
+            phaseAngleDeg={moon.phase_angle_deg ?? undefined}
+            size={44}
+          />
         </div>
       </section>
+
+      <section className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+        {eventItems.map((event) => (
+          <div
+            key={event.label}
+            className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5"
+          >
+            <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
+              {event.label}
+            </div>
+            <div className="mt-1 text-sm font-semibold leading-snug text-slate-100">
+              {event.value}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[11px] text-slate-400/70">
+        <div>Source: {summary.meta.calculation_source}</div>
+        <div>
+          Updated {lastUpdatedLabel}
+          {summaryQ.isFetching ? " · updating" : ""}
+        </div>
+      </footer>
     </div>
   );
 }
