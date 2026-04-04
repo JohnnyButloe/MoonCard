@@ -127,7 +127,7 @@ function DashboardContent({
         </div>
       ) : null}
 
-      <div className="relative mx-auto max-w-6xl px-6 py-8">
+      <div className="relative mx-auto max-w-6xl px-4 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-6">
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div
             className="absolute inset-0"
@@ -141,7 +141,7 @@ function DashboardContent({
           <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
         </div>
 
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-sky-200/60">
               Lunar dashboard
@@ -157,8 +157,8 @@ function DashboardContent({
           />
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-12">
-          <section className="flex h-full lg:col-span-7 xl:col-span-8">
+        <div className="grid gap-4 lg:grid-cols-12 lg:gap-4 xl:gap-5">
+          <section className="flex min-w-0 lg:col-span-7">
             <MoonNowCard
               lat={active.latitude}
               lon={active.longitude}
@@ -166,14 +166,14 @@ function DashboardContent({
               label={active.label}
             />
           </section>
-          <section className="flex h-full lg:col-span-5 xl:col-span-4">
-            <div className="flex h-full w-full rounded-2xl bg-slate-950/68 p-4 ring-1 ring-white/12 backdrop-blur">
+          <section className="flex min-w-0 lg:col-span-5">
+            <div className="flex h-full w-full min-w-0 flex-col rounded-[1.75rem] bg-slate-950/68 p-3.5 ring-1 ring-white/12 shadow-xl shadow-black/20 backdrop-blur sm:p-4">
               <MoonPhaseCalendar tz={tz} />
             </div>
           </section>
         </div>
 
-        <section className="mt-6">
+        <section className="mt-4 rounded-[1.75rem] bg-slate-950/38 p-2 ring-1 ring-white/8 backdrop-blur-sm sm:p-2.5">
           <MoonAltitudeGraph
             lat={active.latitude}
             lon={active.longitude}
