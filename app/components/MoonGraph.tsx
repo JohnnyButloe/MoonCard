@@ -4,6 +4,11 @@ import { useId } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 import { useMoonCard } from "../hooks/useAstronomy";
+import {
+  DashboardPanelState,
+  DashboardSkeletonBlock,
+  DashboardStatusBanner,
+} from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 const VIEW_W = 160;
@@ -351,11 +356,79 @@ export default function MoonAltitudeGraph({
   const summaryQ = useMoonCard(lat, lon, tz, { label });
   const idPrefix = useId().replace(/:/g, "-");
 
-  if (!summaryQ.data || summaryQ.error) return null;
+  if (summaryQ.error && !summaryQ.data) {
+    return (
+      <DashboardPanelState
+        title="Timeline unavailable"
+        body="The astronomy timeline could not be loaded right now."
+        tone="danger"
+        minHeightClass="min-h-[18rem]"
+      />
+    );
+  }
+
+  if (!summaryQ.data) {
+    return (
+      <div className="flex min-h-[18rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <DashboardSkeletonBlock className="h-2 w-28 rounded-full" />
+            <DashboardSkeletonBlock className="h-4 w-36" />
+          </div>
+          <div className="flex gap-2">
+            <DashboardSkeletonBlock className="h-6 w-20 rounded-full" />
+            <DashboardSkeletonBlock className="h-6 w-16 rounded-full" />
+          </div>
+        </div>
+
+        <DashboardSkeletonBlock className="h-[10rem] rounded-[1rem]" />
+
+        <div className="flex flex-wrap gap-1.5">
+          <DashboardSkeletonBlock className="h-6 w-24 rounded-full" />
+          <DashboardSkeletonBlock className="h-6 w-24 rounded-full" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 md:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <DashboardSkeletonBlock
+              key={`moon-graph-skeleton-${index}`}
+              className="h-12 rounded-lg"
+            />
+          ))}
+        </div>
+
+        <DashboardStatusBanner>
+          Loading the astronomy timeline. This can take a moment.
+        </DashboardStatusBanner>
+      </div>
+    );
+  }
 
   const summary = summaryQ.data;
   const now = new Date(summary.meta.timestamp_iso);
   const nowMs = now.getTime();
+  const hasCanonicalSummaryIssues = summary.errors.length > 0;
+  const hasPartialTimeline =
+    summary.twilight.segments.length === 0 ||
+    summary.sun.sunrise === null ||
+    summary.sun.sunset === null;
+  const timelineStatus =
+    summaryQ.error
+      ? {
+          tone: "warning" as const,
+          message: "Timeline refresh failed. Showing the last update.",
+        }
+      : hasCanonicalSummaryIssues
+        ? {
+            tone: "warning" as const,
+            message: "Astronomy data is degraded. Some timeline moments may be limited.",
+          }
+        : hasPartialTimeline
+          ? {
+              tone: "neutral" as const,
+              message: "Timeline is using partial astronomy data.",
+            }
+          : null;
 
   const localDate = summary.meta.requested_datetime.date;
   const dayStartMs = fromZonedTime(`${localDate}T00:00:00`, tz).getTime();
@@ -436,7 +509,7 @@ export default function MoonAltitudeGraph({
   const starGlowId = `${idPrefix}-starGlow`;
 
   return (
-    <div className="w-full rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+    <div className="min-h-[18rem] w-full rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2.5 sm:flex-nowrap">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
@@ -471,6 +544,12 @@ export default function MoonAltitudeGraph({
           </button>
         </div>
       </header>
+
+      {timelineStatus ? (
+        <DashboardStatusBanner tone={timelineStatus.tone} className="mb-3">
+          {timelineStatus.message}
+        </DashboardStatusBanner>
+      ) : null}
 
       <div className="overflow-hidden rounded-[1rem] border border-white/10 bg-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
         <div className="aspect-[5/1.18] w-full">
