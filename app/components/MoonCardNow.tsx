@@ -181,14 +181,18 @@ export default function MoonNowCard({
 
   if (summaryQ.error && !summaryQ.data) {
     return (
-      <div className="h-full w-full rounded-2xl p-4 text-red-600 shadow">
+      <div className="flex h-full w-full items-center rounded-[1.5rem] border border-red-400/20 bg-slate-950/70 p-4 text-sm text-red-200 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur">
         Failed to load lunar data.
       </div>
     );
   }
 
   if (!summaryQ.data) {
-    return <div className="h-full w-full rounded-2xl p-4 shadow">Loading…</div>;
+    return (
+      <div className="flex h-full w-full items-center rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300/78 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur">
+        Loading…
+      </div>
+    );
   }
 
   const summary = summaryQ.data;
@@ -230,19 +234,22 @@ export default function MoonNowCard({
   ];
 
   return (
-    <div className="flex h-full w-full flex-col gap-2.5 rounded-2xl bg-slate-950/68 p-3.5 shadow-xl shadow-black/30 ring-1 ring-white/12 backdrop-blur">
-      <header className="flex items-start justify-between gap-3">
+    <div className="flex h-full w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+      <header className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap">
         <div className="min-w-0 space-y-0.5">
-          <h2 className="text-base font-semibold tracking-tight text-slate-50">
+          <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
+            Current snapshot
+          </p>
+          <h2 className="text-sm font-semibold tracking-tight text-slate-50">
             Moon now
           </h2>
-          <p className="text-xs text-slate-300/75">
+          <p className="text-[11px] text-slate-300/72">
             {formatLocalDateTime(summary.meta.timestamp_iso, tz)}
           </p>
         </div>
 
         <div
-          className={`flex shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-slate-950/40 px-2.5 py-1.5 ${
+          className={`flex min-w-0 shrink-0 items-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] px-2.5 py-1.5 ${
             weatherQ.isFetching ? "opacity-80" : "opacity-100"
           }`}
           aria-label={weatherTitle}
@@ -253,14 +260,14 @@ export default function MoonNowCard({
             <div className="text-[10px] uppercase tracking-[0.14em] text-slate-300/65">
               Weather
             </div>
-            <div className="text-xs font-medium leading-tight text-slate-100">
+            <div className="text-[11px] font-medium leading-tight text-slate-100">
               {weatherLabel(weatherCondition)}
             </div>
           </div>
         </div>
       </header>
 
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-3">
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
           <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
             Illumination
@@ -275,7 +282,7 @@ export default function MoonNowCard({
             <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
               Altitude
             </div>
-            <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
+            <div className="mt-1 text-[1.05rem] font-semibold leading-tight text-slate-50">
               {formatDegrees(moon.altitude_deg)}
             </div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
@@ -290,7 +297,7 @@ export default function MoonNowCard({
             <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
               Azimuth
             </div>
-            <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
+            <div className="mt-1 text-[0.96rem] font-semibold leading-snug text-slate-50">
               {formatAzimuthWithDirection(moon.azimuth_deg)}
             </div>
             <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100 md:left-0 md:right-auto">
@@ -307,7 +314,7 @@ export default function MoonNowCard({
           <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
             Current phase
           </div>
-          <div className="mt-1 text-lg font-semibold leading-tight text-slate-50">
+          <div className="mt-1 text-[1.02rem] font-semibold leading-tight text-slate-50">
             {moon.phase_name ?? "—"}
           </div>
         </div>
@@ -324,19 +331,19 @@ export default function MoonNowCard({
         {eventItems.map((event) => (
           <div
             key={event.label}
-            className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5"
+            className="min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5"
           >
             <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
               {event.label}
             </div>
-            <div className="mt-1 text-sm font-semibold leading-snug text-slate-100">
+            <div className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">
               {event.value}
             </div>
           </div>
         ))}
       </section>
 
-      <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[11px] text-slate-400/70">
+      <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
         <div>Source: {summary.meta.calculation_source}</div>
         <div>
           Updated {lastUpdatedLabel}
