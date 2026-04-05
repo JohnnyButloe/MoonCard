@@ -9,11 +9,11 @@ from skyfield import almanac
 from skyfield.api import wgs84
 
 # Reuse the microservice's existing Skyfield loader/ephemeris (keeps behavior consistent)
-from app.python_service.moon_ephem import eph, ts
+from app.python_service.moon_ephem import get_runtime
 
 # Reuse your existing "local day tied to longitude" helpers (keeps conventions consistent)
 from app.python_service.moon import local_day_bounds, resolve_tz
-from app.python_service.sun import sun_events_for_date
+from app.python_service.sun import SunEvents as SunEventResult, sun_events_for_date
 
 
 _PHASES = {
@@ -30,7 +30,7 @@ class TwilightSegment(TypedDict):
     startLocal: str
     endLocal: str
 
-class SunEvents(TypedDict):
+class TwilightSunEvents(TypedDict):
     sunriseLocal: Optional[str]
     sunsetLocal: Optional[str]
 
@@ -64,8 +64,10 @@ def twilight_segments_for_date(
     lon_deg: float,
     date_iso: str,
     tz_name: Optional[str] = None,
+    sun_events_raw: Optional[SunEventResult] = None,
 ) -> Dict[str, Any]:
     """Return twilight segments for the given local calendar date."""
+    runtime = get_runtime()
     tz_local = resolve_tz(tz_name, lon_deg)
     timezone_offset = _offset_str_from_tz(tz_local)
 
@@ -75,21 +77,22 @@ def twilight_segments_for_date(
     end_local = end_utc.astimezone(tz_local)
 
     # Build Skyfield time range
-    t0 = ts.utc(start_utc)
-    t1 = ts.utc(end_utc)
+    t0 = runtime.ts.utc(start_utc)
+    t1 = runtime.ts.utc(end_utc)
 
     # Observer for this location
     topos = wgs84.latlon(lat_deg, lon_deg)
 
     # Skyfield function returning 0..4 = dark, astro, naut, civil, day
-    f = almanac.dark_twilight_day(eph, topos)
+    f = almanac.dark_twilight_day(runtime.eph, topos)
 
-    sun_events_raw = sun_events_for_date(
-        lat_deg=lat_deg,
-        lon_deg=lon_deg,
-        date_iso=date_iso,
-        tz_name=tz_name,
-    )
+    if sun_events_raw is None:
+        sun_events_raw = sun_events_for_date(
+            lat_deg=lat_deg,
+            lon_deg=lon_deg,
+            date_iso=date_iso,
+            tz_name=tz_name,
+        )
 
     # Find transitions during this local civil day
     times, states = almanac.find_discrete(t0, t1, f)
@@ -123,7 +126,7 @@ def twilight_segments_for_date(
         }
     )
 
-    sun_events: SunEvents = {
+    sun_events: TwilightSunEvents = {
         "sunriseLocal": sun_events_raw.sunrise.isoformat() if sun_events_raw.sunrise else None,
         "sunsetLocal": sun_events_raw.sunset.isoformat() if sun_events_raw.sunset else None,
     }

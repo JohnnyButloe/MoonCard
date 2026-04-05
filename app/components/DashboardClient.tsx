@@ -8,6 +8,7 @@ import MoonAltitudeGraph from "./MoonGraph";
 import MoonPhaseCalendar from "./MoonPhaseCalendar";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
+import { DashboardPanelState } from "./DashboardState";
 import {
   LocationProvider,
   useLocation,
@@ -56,6 +57,12 @@ function DashboardContent({
   if (!hasCompletedOnboarding) {
     return <LocationOnboarding onSelect={handleSelectLocation} />;
   }
+
+  const hasActiveLocation =
+    Number.isFinite(active?.latitude) &&
+    Number.isFinite(active?.longitude) &&
+    typeof tz === "string" &&
+    tz.length > 0;
 
   return (
     <main className="min-h-screen bg-[#050816] text-slate-100">
@@ -150,39 +157,69 @@ function DashboardContent({
               Mooncard
             </h1>
           </div>
-          <LocationTag
-            label={active.label}
-            latitude={active.latitude}
-            longitude={active.longitude}
-            source={active.source}
-            onClick={() => setIsLocationEditorOpen(true)}
-          />
+          {hasActiveLocation ? (
+            <LocationTag
+              label={active.label}
+              latitude={active.latitude}
+              longitude={active.longitude}
+              source={active.source}
+              onClick={() => setIsLocationEditorOpen(true)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsLocationEditorOpen(true)}
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+            >
+              Set location
+            </button>
+          )}
         </header>
 
-        <div className="grid gap-3.5 xl:grid-cols-12 xl:gap-4">
-          <section className="flex min-w-0 xl:col-span-7">
-            <MoonNowCard
-              lat={active.latitude}
-              lon={active.longitude}
-              tz={tz}
-              label={active.label}
-            />
-          </section>
-          <section className="flex min-w-0 xl:col-span-5">
-            <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-              <MoonPhaseCalendar tz={tz} />
+        {hasActiveLocation ? (
+          <>
+            <div className="grid gap-3.5 xl:grid-cols-12 xl:gap-4">
+              <section className="flex min-w-0 xl:col-span-7">
+                <MoonNowCard
+                  lat={active.latitude}
+                  lon={active.longitude}
+                  tz={tz}
+                  label={active.label}
+                />
+              </section>
+              <section className="flex min-w-0 xl:col-span-5">
+                <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+                  <MoonPhaseCalendar tz={tz} />
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
 
-        <section className="mt-3.5">
-          <MoonAltitudeGraph
-            lat={active.latitude}
-            lon={active.longitude}
-            tz={tz}
-            label={active.label}
-          />
-        </section>
+            <section className="mt-3.5">
+              <MoonAltitudeGraph
+                lat={active.latitude}
+                lon={active.longitude}
+                tz={tz}
+                label={active.label}
+              />
+            </section>
+          </>
+        ) : (
+          <section className="mt-1">
+            <DashboardPanelState
+              title="Choose a location"
+              body="Select a place to load the lunar dashboard."
+              minHeightClass="min-h-[18rem]"
+            >
+              <button
+                type="button"
+                onClick={() => setIsLocationEditorOpen(true)}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+              >
+                Set location
+              </button>
+            </DashboardPanelState>
+          </section>
+        )}
       </div>
     </main>
   );

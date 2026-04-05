@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { useMoonPhaseWindow } from "../hooks/useAstronomy";
+import {
+  DashboardPanelState,
+  DashboardSkeletonBlock,
+  DashboardStatusBanner,
+} from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 const WINDOW_DAYS = 35;
@@ -51,30 +56,85 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
 
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
-      <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-[7rem] items-center rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-slate-300/72">
-          Loading calendar…
+      <section ref={rootRef} className="flex min-h-[19rem] flex-1 flex-col gap-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-2">
+            <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
+            <DashboardSkeletonBlock className="h-4 w-28" />
+          </div>
+          <DashboardSkeletonBlock className="h-8 w-32 rounded-full" />
         </div>
+
+        <div className="grid grid-cols-7 gap-0.5">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <DashboardSkeletonBlock
+              key={`calendar-heading-skeleton-${index}`}
+              className="h-3 rounded-md"
+            />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-0.5">
+          {Array.from({ length: 35 }).map((_, index) => (
+            <DashboardSkeletonBlock
+              key={`calendar-day-skeleton-${index}`}
+              className="h-[2.85rem] rounded-lg"
+            />
+          ))}
+        </div>
+
+        <DashboardStatusBanner>
+          Loading the phase window. This can take a moment.
+        </DashboardStatusBanner>
       </section>
     );
   }
 
-  if (phaseWindowQ.error || !phaseWindowQ.data) {
+  if (phaseWindowQ.error && !phaseWindowQ.data) {
     return (
       <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-[7rem] items-center rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-slate-300/72">
-          Calendar unavailable.
-        </div>
+        <DashboardPanelState
+          title="Phase window unavailable"
+          body="The calendar could not load this window."
+          tone="danger"
+          minHeightClass="min-h-[19rem]"
+        />
       </section>
     );
   }
 
   const { days, meta } = phaseWindowQ.data;
+  const hasPhaseEntries = days.some((day) => day.phases.length > 0);
+  const phaseWindowStatus =
+    phaseWindowQ.error
+      ? {
+          tone: "warning" as const,
+          message: "Phase refresh failed. Showing the last window.",
+        }
+      : phaseWindowQ.isFetching
+        ? {
+            tone: "neutral" as const,
+            message: "Updating the phase window…",
+          }
+        : null;
+
+  if (!days.length || !hasPhaseEntries) {
+    return (
+      <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+        <DashboardPanelState
+          title="No phases in this window"
+          body="Try another week to load upcoming major phases."
+          minHeightClass="min-h-[19rem]"
+        />
+      </section>
+    );
+  }
+
   const dayLabels = days.slice(0, 7).map((day) => day.weekday_short);
   const rangeLabel = `${formatRangeDate(meta.window_start_local_date, tz)} - ${formatRangeDate(meta.window_end_local_date, tz)}`;
 
   return (
-    <section ref={rootRef} className="flex min-h-0 flex-1 flex-col gap-2.5">
+    <section ref={rootRef} className="flex min-h-[19rem] flex-1 flex-col gap-2.5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
@@ -117,6 +177,12 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           </button>
         </div>
       </div>
+
+      {phaseWindowStatus ? (
+        <DashboardStatusBanner tone={phaseWindowStatus.tone}>
+          {phaseWindowStatus.message}
+        </DashboardStatusBanner>
+      ) : null}
 
       <div className="grid grid-cols-7 gap-0.5 text-[9px] uppercase tracking-[0.15em] text-slate-400/76">
         {dayLabels.map((label, index) => (

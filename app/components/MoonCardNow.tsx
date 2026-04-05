@@ -3,6 +3,11 @@
 import { useMoonCard } from "../hooks/useAstronomy";
 import { useWeatherNow } from "../hooks/useWeather";
 import type { WeatherCondition } from "../providers/weather";
+import {
+  DashboardPanelState,
+  DashboardSkeletonBlock,
+  DashboardStatusBanner,
+} from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 
 function formatLocalTime(iso: string | undefined, tz: string): string {
@@ -181,16 +186,48 @@ export default function MoonNowCard({
 
   if (summaryQ.error && !summaryQ.data) {
     return (
-      <div className="flex h-full w-full items-center rounded-[1.5rem] border border-red-400/20 bg-slate-950/70 p-4 text-sm text-red-200 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur">
-        Failed to load lunar data.
-      </div>
+      <DashboardPanelState
+        title="Moon data unavailable"
+        body="The astronomy service did not respond. Try refreshing in a moment."
+        tone="danger"
+      />
     );
   }
 
   if (!summaryQ.data) {
     return (
-      <div className="flex h-full w-full items-center rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300/78 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur">
-        Loading…
+      <div className="flex h-full w-full min-h-[21rem] flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
+            <DashboardSkeletonBlock className="h-4 w-28" />
+            <DashboardSkeletonBlock className="h-3 w-40" />
+          </div>
+          <DashboardSkeletonBlock className="h-11 w-24 rounded-xl" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl" />
+          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl" />
+          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl sm:block hidden" />
+        </div>
+
+        <DashboardSkeletonBlock className="h-[4.6rem] rounded-xl" />
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <DashboardSkeletonBlock
+              key={`moon-now-skeleton-${index}`}
+              className="h-[4.4rem] rounded-xl"
+            />
+          ))}
+        </div>
+
+        <DashboardSkeletonBlock className="mt-auto h-3 w-44 rounded-full" />
+
+        <DashboardStatusBanner>
+          Loading moon data. This can take a moment.
+        </DashboardStatusBanner>
       </div>
     );
   }
@@ -199,6 +236,43 @@ export default function MoonNowCard({
   const moon = summary.moon;
   const weatherCondition = weatherQ.data?.condition;
   const weatherCloudCover = weatherQ.data?.cloudCoverPct;
+  const missingPrimaryFieldCount = [
+    moon.phase_name,
+    moon.illumination_percent,
+    moon.altitude_deg,
+    moon.azimuth_deg,
+  ].filter((value) => value === null || value === undefined).length;
+  const hasPartialMoonSummary = missingPrimaryFieldCount > 0;
+  const hasCanonicalSummaryIssues = summary.errors.length > 0;
+  const astronomyStatus =
+    summaryQ.error
+      ? {
+          tone: "warning" as const,
+          message: "Astronomy refresh failed. Showing the last update.",
+        }
+      : hasCanonicalSummaryIssues
+        ? {
+            tone: "warning" as const,
+            message: "Astronomy data is degraded. Some details may be limited.",
+          }
+        : hasPartialMoonSummary
+          ? {
+              tone: "neutral" as const,
+              message: "Some lunar details are unavailable right now.",
+            }
+          : null;
+  const weatherStatus =
+    weatherQ.error && weatherQ.data
+      ? {
+          tone: "neutral" as const,
+          message: "Weather refresh failed. Showing the last conditions.",
+        }
+      : weatherQ.error
+        ? {
+            tone: "neutral" as const,
+            message: "Weather is unavailable. Lunar data is still live.",
+          }
+        : null;
   const weatherTitle = weatherCondition
     ? `${weatherLabel(weatherCondition)}${
         typeof weatherCloudCover === "number"
@@ -208,6 +282,25 @@ export default function MoonNowCard({
     : weatherQ.error
       ? "Weather unavailable"
       : "Loading weather";
+  const weatherBadgeLabel = weatherCondition
+    ? weatherLabel(weatherCondition)
+    : weatherQ.error && weatherQ.data
+      ? "Last weather"
+      : weatherQ.error
+        ? "Unavailable"
+        : weatherQ.isLoading
+          ? "Loading"
+          : "Weather";
+  const weatherBadgeDetail =
+    typeof weatherCloudCover === "number" && weatherCondition
+      ? `${Math.round(weatherCloudCover)}% cloud`
+      : weatherQ.error && weatherQ.data
+        ? "Cached"
+        : weatherQ.error
+          ? "Offline"
+          : weatherQ.isLoading
+            ? "Syncing"
+            : "Live";
 
   const lastUpdatedLabel =
     summaryQ.dataUpdatedAt > 0
@@ -234,7 +327,7 @@ export default function MoonNowCard({
   ];
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+    <div className="flex h-full min-h-[21rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
       <header className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap">
         <div className="min-w-0 space-y-0.5">
           <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
@@ -261,11 +354,26 @@ export default function MoonNowCard({
               Weather
             </div>
             <div className="text-[11px] font-medium leading-tight text-slate-100">
-              {weatherLabel(weatherCondition)}
+              {weatherBadgeLabel}
+            </div>
+            <div className="text-[10px] text-slate-400/72">
+              {weatherBadgeDetail}
             </div>
           </div>
         </div>
       </header>
+
+      {astronomyStatus ? (
+        <DashboardStatusBanner tone={astronomyStatus.tone}>
+          {astronomyStatus.message}
+        </DashboardStatusBanner>
+      ) : null}
+
+      {weatherStatus ? (
+        <DashboardStatusBanner tone={weatherStatus.tone}>
+          {weatherStatus.message}
+        </DashboardStatusBanner>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
