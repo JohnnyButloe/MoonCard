@@ -9,10 +9,7 @@ from skyfield.api import wgs84
 from skyfield import almanac
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.python_service.moon_ephem import eph, ts
-
-MOON = eph["moon"]
-EARTH = eph["earth"]
+from app.python_service.moon_ephem import get_runtime
 # Calibrated event horizon for Moon rise/set.
 # Using Skyfield's default (upper-limb + standard refraction) produced a
 # systematic late moonset bias vs observed/local-provider values in this app.
@@ -82,8 +79,9 @@ def moon_events_for_date(
             (fallback: first set after rise if none in-day)
     - high_moon / low_moon: first upper / lower transits within the local civil day
     """
+    runtime = get_runtime()
     topos = wgs84.latlon(lat_deg, lon_deg)
-    observer = EARTH + topos
+    observer = runtime.earth + topos
     target_date = date.fromisoformat(date_iso)
     tz_local = resolve_tz(tz_name, lon_deg)
 
@@ -104,8 +102,8 @@ def moon_events_for_date(
     # fall on the next calendar day).
     rs_start_utc = start_utc - timedelta(days=2)
     rs_end_utc = end_utc + timedelta(days=2)
-    rs_t0 = ts.from_datetime(rs_start_utc)
-    rs_t1 = ts.from_datetime(rs_end_utc)
+    rs_t0 = runtime.ts.from_datetime(rs_start_utc)
+    rs_t1 = runtime.ts.from_datetime(rs_end_utc)
 
     # --- Rising / setting events over the wider window ---
     # Use dedicated routines for higher-precision Moon rise/set event timing.
@@ -113,7 +111,7 @@ def moon_events_for_date(
     sets: list[datetime] = []
     t_rise, y_rise = almanac.find_risings(
         observer,
-        MOON,
+        runtime.moon,
         rs_t0,
         rs_t1,
         horizon_degrees=MOON_EVENT_HORIZON_DEG,
@@ -124,7 +122,7 @@ def moon_events_for_date(
 
     t_set, y_set = almanac.find_settings(
         observer,
-        MOON,
+        runtime.moon,
         rs_t0,
         rs_t1,
         horizon_degrees=MOON_EVENT_HORIZON_DEG,
@@ -159,10 +157,10 @@ def moon_events_for_date(
                 break
 
     # --- Meridian transits (high / low) within the local civil day ---
-    transit_func = almanac.meridian_transits(eph, MOON, topos)
+    transit_func = almanac.meridian_transits(runtime.eph, runtime.moon, topos)
     t_tr, is_culmination = almanac.find_discrete(
-        ts.from_datetime(start_utc),
-        ts.from_datetime(end_utc),
+        runtime.ts.from_datetime(start_utc),
+        runtime.ts.from_datetime(end_utc),
         transit_func,
     )
 

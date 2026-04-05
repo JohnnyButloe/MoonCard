@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
+from time import perf_counter
 from typing import Any, Dict, Iterable, List, Optional
 
 from skyfield import almanac
 from skyfield.api import wgs84
 
 from app.python_service.moon import MoonEvents, moon_events_for_date, resolve_tz
-from app.python_service.moon_ephem import EARTH, SUN, moon_now, ts, eph
+from app.python_service.moon_ephem import get_runtime, moon_now
 from app.python_service.sun import SunEvents, sun_events_for_date
 from app.python_service.twilight import twilight_segments_for_date
 
@@ -17,6 +18,8 @@ CACHE_COORD_PRECISION = 4
 CACHE_ELEV_PRECISION = 1
 DEFAULT_SUN_PATH_SAMPLES = 220
 DEFAULT_PHASE_WINDOW_DAYS = 35
+DAILY_BUNDLE_CACHE_SIZE = 1024
+SUN_PATH_CACHE_SIZE = 256
 
 
 MAJOR_PHASES: Dict[int, Dict[str, Any]] = {
@@ -103,6 +106,42 @@ def _offset_str(tz_local) -> str:
     return f"{offset[:3]}:{offset[3:]}"
 
 
+def _bundle_cache_key(
+    lat_key: float,
+    lon_key: float,
+    tz_name: str,
+    date_iso: str,
+) -> str:
+    return f"astronomy:{lat_key}:{lon_key}:{tz_name}:{date_iso}"
+
+
+def _sun_path_cache_key(
+    lat_key: float,
+    lon_key: float,
+    elev_key: float,
+    tz_name: str,
+    date_iso: str,
+    sample_count: int,
+) -> str:
+    return (
+        f"astronomy-sun-path:{lat_key}:{lon_key}:{elev_key}:"
+        f"{tz_name}:{date_iso}:{sample_count}"
+    )
+
+
+def _run_timed(
+    timings: Dict[str, float],
+    label: str,
+    func,
+    *args,
+    **kwargs,
+):
+    start = perf_counter()
+    result = func(*args, **kwargs)
+    timings[label] = round((perf_counter() - start) * 1000, 2)
+    return result
+
+
 def _moon_event_payload(events: MoonEvents) -> Dict[str, Optional[str]]:
     return {
         "rise_local": _to_iso_local(events.rise),
@@ -127,9 +166,10 @@ def _sun_geometry(
     elev_m: float = 0.0,
 ) -> Dict[str, float | bool]:
     dt_utc = _ensure_utc(datetime_utc)
-    t = ts.from_datetime(dt_utc)
-    observer = EARTH + wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
-    apparent_sun = observer.at(t).observe(SUN).apparent()
+    runtime = get_runtime()
+    t = runtime.ts.from_datetime(dt_utc)
+    observer = runtime.earth + wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
+    apparent_sun = observer.at(t).observe(runtime.sun).apparent()
     alt, az, _distance = apparent_sun.altaz(
         temperature_C=10.0,
         pressure_mbar=1010.0,
@@ -183,19 +223,34 @@ def _build_sun_path_samples(
     start_utc = window_start_local.astimezone(timezone.utc)
     end_utc = window_end_local.astimezone(timezone.utc)
     total_seconds = max(1.0, (end_utc - start_utc).total_seconds())
+    runtime = get_runtime()
+    observer = runtime.earth + wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
+    sample_utc_values = [
+        start_utc + timedelta(seconds=total_seconds * (idx / (count - 1)))
+        for idx in range(count)
+    ]
+    sample_local_values = [sample_utc.astimezone(tz_local) for sample_utc in sample_utc_values]
+    apparent_sun = observer.at(runtime.ts.from_datetimes(sample_utc_values)).observe(
+        runtime.sun
+    ).apparent()
+    altitudes, azimuths, _distance = apparent_sun.altaz(
+        temperature_C=10.0,
+        pressure_mbar=1010.0,
+    )
 
     samples: List[Dict[str, Any]] = []
-    for idx in range(count):
-        ratio = idx / (count - 1)
-        sample_utc = start_utc + timedelta(seconds=total_seconds * ratio)
-        sample_local = sample_utc.astimezone(tz_local)
-        geometry = _sun_geometry(sample_utc, lat_deg, lon_deg, elev_m)
+    for sample_utc, sample_local, altitude_deg, azimuth_deg in zip(
+        sample_utc_values,
+        sample_local_values,
+        altitudes.degrees,
+        azimuths.degrees,
+    ):
         samples.append(
             {
                 "time_utc": _to_iso_utc(sample_utc),
                 "time_local": _to_iso_local(sample_local),
-                "altitude_deg": geometry["altitude_deg"],
-                "azimuth_deg": geometry["azimuth_deg"],
+                "altitude_deg": float(altitude_deg),
+                "azimuth_deg": float(azimuth_deg),
             }
         )
 
@@ -281,17 +336,13 @@ def _earliest_after(
     return best_iso
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=DAILY_BUNDLE_CACHE_SIZE)
 def _daily_bundle_cached(
     lat_key: float,
     lon_key: float,
-    elev_key: float,
     tz_name: str,
     date_iso: str,
-    sun_path_samples: int,
 ) -> Dict[str, Any]:
-    tz_local = resolve_tz(tz_name, lon_key)
-    target_date = date.fromisoformat(date_iso)
     moon_events = moon_events_for_date(
         lat_deg=lat_key,
         lon_deg=lon_key,
@@ -309,6 +360,7 @@ def _daily_bundle_cached(
         lon_deg=lon_key,
         date_iso=date_iso,
         tz_name=tz_name,
+        sun_events_raw=sun_events,
     )
 
     sun_payload = _sun_event_payload(sun_events)
@@ -316,20 +368,32 @@ def _daily_bundle_cached(
     return {
         "date_local": date_iso,
         "moon": _moon_event_payload(moon_events),
-        "sun": {
-            "events": sun_payload,
-            "path": _build_sun_path_samples(
-                lat_deg=lat_key,
-                lon_deg=lon_key,
-                elev_m=elev_key,
-                target_date=target_date,
-                tz_local=tz_local,
-                sun_events=sun_payload,
-                sample_count=sun_path_samples,
-            ),
-        },
+        "sun": {"events": sun_payload},
         "twilight": _twilight_payload(twilight),
     }
+
+
+@lru_cache(maxsize=SUN_PATH_CACHE_SIZE)
+def _sun_path_cached(
+    lat_key: float,
+    lon_key: float,
+    elev_key: float,
+    tz_name: str,
+    date_iso: str,
+    sample_count: int,
+) -> Dict[str, Any]:
+    day_bundle = _daily_bundle_cached(lat_key, lon_key, tz_name, date_iso)
+    tz_local = resolve_tz(tz_name, lon_key)
+    target_date = date.fromisoformat(date_iso)
+    return _build_sun_path_samples(
+        lat_deg=lat_key,
+        lon_deg=lon_key,
+        elev_m=elev_key,
+        target_date=target_date,
+        tz_local=tz_local,
+        sun_events=day_bundle["sun"]["events"],
+        sample_count=sample_count,
+    )
 
 
 def _build_context(
@@ -371,7 +435,13 @@ def astronomy_summary(
     elev_m: float = 0.0,
     sun_path_samples: int = DEFAULT_SUN_PATH_SAMPLES,
 ) -> Dict[str, Any]:
-    context = _build_context(
+    timings: Dict[str, float] = {}
+    total_started = perf_counter()
+    sample_count = max(2, int(sun_path_samples))
+    context = _run_timed(
+        timings,
+        "context_ms",
+        _build_context,
         lat_deg=lat_deg,
         lon_deg=lon_deg,
         tz_name=tz_name,
@@ -380,38 +450,58 @@ def astronomy_summary(
         datetime_iso=datetime_iso,
     )
 
-    today_bundle = _daily_bundle_cached(
+    today_bundle = _run_timed(
+        timings,
+        "today_bundle_ms",
+        _daily_bundle_cached,
+        context["lat_key"],
+        context["lon_key"],
+        context["timezone"],
+        context["local_date"],
+    )
+    previous_bundle = _run_timed(
+        timings,
+        "previous_bundle_ms",
+        _daily_bundle_cached,
+        context["lat_key"],
+        context["lon_key"],
+        context["timezone"],
+        context["previous_local_date"],
+    )
+    next_bundle = _run_timed(
+        timings,
+        "next_bundle_ms",
+        _daily_bundle_cached,
+        context["lat_key"],
+        context["lon_key"],
+        context["timezone"],
+        context["next_local_date"],
+    )
+    sun_path = _run_timed(
+        timings,
+        "sun_path_ms",
+        _sun_path_cached,
         context["lat_key"],
         context["lon_key"],
         context["elev_key"],
         context["timezone"],
         context["local_date"],
-        sun_path_samples,
-    )
-    previous_bundle = _daily_bundle_cached(
-        context["lat_key"],
-        context["lon_key"],
-        context["elev_key"],
-        context["timezone"],
-        context["previous_local_date"],
-        sun_path_samples,
-    )
-    next_bundle = _daily_bundle_cached(
-        context["lat_key"],
-        context["lon_key"],
-        context["elev_key"],
-        context["timezone"],
-        context["next_local_date"],
-        sun_path_samples,
+        sample_count,
     )
 
-    moon_current = moon_now(
+    moon_current = _run_timed(
+        timings,
+        "moon_current_ms",
+        moon_now,
         context["current_utc"],
         lat_deg=lat_deg,
         lon_deg=lon_deg,
         elev_m=elev_m,
     )
-    sun_current = _sun_geometry(
+    sun_current = _run_timed(
+        timings,
+        "sun_current_ms",
+        _sun_geometry,
         context["current_utc"],
         lat_deg=lat_deg,
         lon_deg=lon_deg,
@@ -452,15 +542,33 @@ def astronomy_summary(
     )
 
     cache_key = (
-        f"astronomy:{context['lat_key']}:{context['lon_key']}:"
-        f"{context['timezone']}:{context['local_date']}"
+        _bundle_cache_key(
+            context["lat_key"],
+            context["lon_key"],
+            context["timezone"],
+            context["local_date"],
+        )
     )
-
-    return {
+    assembly_started = perf_counter()
+    response = {
         "meta": {
             "source": "python_service",
             "generated_at_utc": _to_iso_utc(datetime.now(timezone.utc)),
             "cache_key": cache_key,
+            "performance": {
+                "timings_ms": {},
+                "cache_keys": {
+                    "summary_bundle": cache_key,
+                    "sun_path": _sun_path_cache_key(
+                        context["lat_key"],
+                        context["lon_key"],
+                        context["elev_key"],
+                        context["timezone"],
+                        context["local_date"],
+                        sample_count,
+                    ),
+                },
+            },
             "location": {
                 "latitude": context["lat_key"],
                 "longitude": context["lon_key"],
@@ -512,7 +620,7 @@ def astronomy_summary(
                 "above_horizon": bool(sun_current["above_horizon"]),
             },
             "events": today_bundle["sun"]["events"],
-            "path": today_bundle["sun"]["path"],
+            "path": sun_path,
         },
         "twilight": {
             "timezone_offset": today_bundle["twilight"]["timezone_offset"],
@@ -522,6 +630,12 @@ def astronomy_summary(
             "sun_events": today_bundle["twilight"]["sun_events"],
         },
     }
+    timings["assembly_ms"] = round((perf_counter() - assembly_started) * 1000, 2)
+    response["meta"]["performance"]["timings_ms"] = {
+        **timings,
+        "total_ms": round((perf_counter() - total_started) * 1000, 2),
+    }
+    return response
 
 
 @lru_cache(maxsize=512)
@@ -530,6 +644,7 @@ def _phase_window_cached(
     start_date_iso: str,
     window_days: int,
 ) -> Dict[str, Any]:
+    runtime = get_runtime()
     tz_local = resolve_tz(tz_name, 0.0)
     start_date_local = date.fromisoformat(start_date_iso)
     start_local = datetime(
@@ -544,10 +659,10 @@ def _phase_window_cached(
     search_start_utc = start_local.astimezone(timezone.utc) - timedelta(days=1)
     search_end_utc = end_local_exclusive.astimezone(timezone.utc) + timedelta(days=1)
 
-    phase_func = almanac.moon_phases(eph)
+    phase_func = almanac.moon_phases(runtime.eph)
     times, states = almanac.find_discrete(
-        ts.from_datetime(search_start_utc),
-        ts.from_datetime(search_end_utc),
+        runtime.ts.from_datetime(search_start_utc),
+        runtime.ts.from_datetime(search_end_utc),
         phase_func,
     )
 

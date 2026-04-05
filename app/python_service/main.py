@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -5,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from app.python_service.astronomy import astronomy_summary, moon_phase_window
 # Keep using the existing "now" implementation from the ephemeris helper.
-from app.python_service.moon_ephem import moon_now
+from app.python_service.moon_ephem import moon_now, warm_runtime
 # Use the new local-day events implementation.
 from app.python_service.moon import moon_events_for_date, MoonEvents
 
@@ -14,8 +15,13 @@ from app.python_service.sun import sun_events_for_date, SunEvents
 from app.python_service.routes.mooncard import router as mooncard_router
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    warm_runtime()
+    yield
 
-app = FastAPI()
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(mooncard_router)
 
 

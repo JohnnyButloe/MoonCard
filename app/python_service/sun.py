@@ -9,7 +9,7 @@ from skyfield import almanac
 from skyfield.api import wgs84
 
 from app.python_service.moon import local_day_bounds, resolve_tz
-from app.python_service.moon_ephem import eph, ts
+from app.python_service.moon_ephem import get_runtime
 
 
 @dataclass
@@ -25,6 +25,7 @@ def sun_events_for_date(
     tz_name: str | None = None,
 ) -> SunEvents:
     """Return sunrise/sunset for the given *local* calendar date."""
+    runtime = get_runtime()
     observer = wgs84.latlon(lat_deg, lon_deg)
     target_date = date.fromisoformat(date_iso)
     tz_local = resolve_tz(tz_name, lon_deg)
@@ -34,8 +35,12 @@ def sun_events_for_date(
     rs_start_utc = start_utc - timedelta(days=1)
     rs_end_utc = end_utc + timedelta(days=1)
 
-    sun_func = almanac.sunrise_sunset(eph, observer)
-    t_rs, is_up = almanac.find_discrete(ts.utc(rs_start_utc), ts.utc(rs_end_utc), sun_func)
+    sun_func = almanac.sunrise_sunset(runtime.eph, observer)
+    t_rs, is_up = almanac.find_discrete(
+        runtime.ts.utc(rs_start_utc),
+        runtime.ts.utc(rs_end_utc),
+        sun_func,
+    )
 
     rs_events: list[tuple[datetime, bool]] = []
     for ti, up in zip(t_rs, is_up):

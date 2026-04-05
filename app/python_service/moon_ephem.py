@@ -22,35 +22,51 @@ so that the FastAPI routes and the frontend do not need to change.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from skyfield import almanac
 from skyfield.api import Loader, wgs84
 from skyfield.trigonometry import position_angle_of
 
 
-# ---------------------------------------------------------------------------
-# Skyfield configuration
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class AstronomyRuntime:
+    ts: Any
+    eph: Any
+    earth: Any
+    moon: Any
+    sun: Any
 
-# Store ephemeris files in a small local directory next to this module, or in
-# a directory configured by the SKYFIELD_DATA_DIR environment variable.
-_DATA_DIR = os.environ.get("SKYFIELD_DATA_DIR")
-if _DATA_DIR is None:
-    _DATA_DIR = str(Path(__file__).resolve().parent / "skyfield-data")
 
-loader = Loader(_DATA_DIR)
-ts = loader.timescale()
+def _skyfield_data_dir() -> str:
+    data_dir = os.environ.get("SKYFIELD_DATA_DIR")
+    if data_dir is not None:
+        return data_dir
+    return str(Path(__file__).resolve().parent / "skyfield-data")
 
-# DE421 is precise enough for lunar work while remaining relatively small.
-# You can swap this for "de440s.bsp" if you want a more modern DE file. :contentReference[oaicite:1]{index=1}
-eph = loader("de421.bsp")
 
-EARTH = eph["earth"]
-MOON = eph["moon"]
-SUN = eph["sun"]
+@lru_cache(maxsize=1)
+def get_runtime() -> AstronomyRuntime:
+    # Keep Skyfield ephemeris loading at process startup / first-use instead of
+    # rebuilding it inside request handlers.
+    loader = Loader(_skyfield_data_dir())
+    ts = loader.timescale()
+    eph = loader("de421.bsp")
+    return AstronomyRuntime(
+        ts=ts,
+        eph=eph,
+        earth=eph["earth"],
+        moon=eph["moon"],
+        sun=eph["sun"],
+    )
+
+
+def warm_runtime() -> AstronomyRuntime:
+    return get_runtime()
 
 
 # ---------------------------------------------------------------------------
@@ -142,15 +158,16 @@ def _moon_geometry(
       - bright_limb_angle_deg: bright-limb / terminator tilt angle [0,360)
     """
     dt_utc = _ensure_utc(datetime_utc)
-    t = ts.from_datetime(dt_utc)
+    runtime = get_runtime()
+    t = runtime.ts.from_datetime(dt_utc)
 
     # Topocentric position of the observer.
     topos = wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
-    observer = EARTH + topos
+    observer = runtime.earth + topos
 
     # Apparent topocentric positions for Moon and Sun (same observer/time).
-    apparent_moon = observer.at(t).observe(MOON).apparent()
-    apparent_sun = observer.at(t).observe(SUN).apparent()
+    apparent_moon = observer.at(t).observe(runtime.moon).apparent()
+    apparent_sun = observer.at(t).observe(runtime.sun).apparent()
 
     # Altitude / azimuth / distance.  We ask Skyfield to apply a simple
     # standard atmosphere so that low-altitude altitudes include refraction. :contentReference[oaicite:3]{index=3}
@@ -161,10 +178,10 @@ def _moon_geometry(
 
     # Illuminated fraction (Meeus 0.5*(1 - cos ψ) under the hood). :contentReference[oaicite:4]{index=4}
     # Skyfield expects a body with `.at()` here (not an Apparent position).
-    illum_frac = float(apparent_moon.fraction_illuminated(SUN))
+    illum_frac = float(apparent_moon.fraction_illuminated(runtime.sun))
 
     # Synodic phase angle (Moon–Sun ecliptic longitude difference).
-    phase_angle_deg = float(almanac.moon_phase(eph, t).degrees % 360.0)
+    phase_angle_deg = float(almanac.moon_phase(runtime.eph, t).degrees % 360.0)
     phase_name = _phase_name_from_angle(phase_angle_deg)
     moon_waxing = phase_angle_deg < 180.0
     bright_limb_angle_deg = float(
@@ -261,11 +278,12 @@ def moon_events(
 
     dt_next_midnight = dt_midnight + timedelta(days=1)
 
-    t0 = ts.from_datetime(dt_midnight)
-    t1 = ts.from_datetime(dt_next_midnight)
+    runtime = get_runtime()
+    t0 = runtime.ts.from_datetime(dt_midnight)
+    t1 = runtime.ts.from_datetime(dt_next_midnight)
 
     topos = wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
-    observer = EARTH + topos
+    observer = runtime.earth + topos
 
     # --- Moonrise and moonset (USNO definition via Skyfield) ----------------
 
@@ -273,7 +291,7 @@ def moon_events(
     set_time: Optional[datetime] = None
 
     # Moonrise: when the Moon’s upper limb appears above the refracted horizon.
-    t_rise, y_rise = almanac.find_risings(observer, MOON, t0, t1)
+    t_rise, y_rise = almanac.find_risings(observer, runtime.moon, t0, t1)
     for ti, yi in zip(t_rise, y_rise):
         # If yi is False this is a special “grazing” event at high latitudes. :contentReference[oaicite:7]{index=7}
         if yi:
@@ -281,7 +299,7 @@ def moon_events(
             break
 
     # Moonset: when the Moon’s upper limb disappears below the refracted horizon.
-    t_set, y_set = almanac.find_settings(observer, MOON, t0, t1)
+    t_set, y_set = almanac.find_settings(observer, runtime.moon, t0, t1)
     for ti, yi in zip(t_set, y_set):
         if yi:
             set_time = ti.utc_datetime()
@@ -293,7 +311,7 @@ def moon_events(
     low_time: Optional[datetime] = None
 
     # meridian_transits() + find_discrete() gives both transits & antitransits. :contentReference[oaicite:8]{index=8}
-    f_transits = almanac.meridian_transits(eph, MOON, topos)
+    f_transits = almanac.meridian_transits(runtime.eph, runtime.moon, topos)
     t_transit, events = almanac.find_discrete(t0, t1, f_transits)
 
     for ti, ev in zip(t_transit, events):
