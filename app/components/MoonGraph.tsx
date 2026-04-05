@@ -436,14 +436,14 @@ export default function MoonAltitudeGraph({
   const starGlowId = `${idPrefix}-starGlow`;
 
   return (
-    <div className="w-full rounded-[1.4rem] bg-slate-950/72 p-3.5 ring-1 ring-white/12 shadow-lg shadow-black/20 backdrop-blur sm:p-4">
-      <header className="mb-2.5 flex flex-wrap items-start justify-between gap-2.5">
+    <div className="w-full rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+      <header className="mb-3 flex flex-wrap items-start justify-between gap-2.5 sm:flex-nowrap">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.26em] text-sky-200/50">
+          <div className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
             Altitude timeline
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-50">
+            <h2 className="text-sm font-semibold tracking-tight text-slate-50">
               Moon/Sun altitude
             </h2>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sky-100/70">
@@ -455,8 +455,8 @@ export default function MoonAltitudeGraph({
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="text-[11px] text-slate-300/70">
+        <div className="flex items-center gap-2 self-start">
+          <div className="whitespace-nowrap text-[10px] text-slate-300/70">
             Updated {lastUpdatedLabel}
             {summaryQ.isFetching ? " · updating" : ""}
           </div>
@@ -651,7 +651,7 @@ export default function MoonAltitudeGraph({
         </div>
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-200/70">
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/72">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
           <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
           Sunrise <span className="font-semibold text-slate-100">{sunriseLegendLabel}</span>
@@ -662,7 +662,7 @@ export default function MoonAltitudeGraph({
         </span>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] md:grid-cols-5">
         {TWILIGHT_LEGEND_ORDER.map((phase) => (
           <div
             key={phase}

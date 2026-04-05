@@ -52,7 +52,9 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
       <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
-        <div className="text-sm text-slate-300/70">Loading calendar…</div>
+        <div className="flex min-h-[7rem] items-center rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-slate-300/72">
+          Loading calendar…
+        </div>
       </section>
     );
   }
@@ -60,7 +62,9 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
   if (phaseWindowQ.error || !phaseWindowQ.data) {
     return (
       <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
-        <div className="text-sm text-slate-300/70">Calendar unavailable.</div>
+        <div className="flex min-h-[7rem] items-center rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-slate-300/72">
+          Calendar unavailable.
+        </div>
       </section>
     );
   }
@@ -70,13 +74,15 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
   const rangeLabel = `${formatRangeDate(meta.window_start_local_date, tz)} - ${formatRangeDate(meta.window_end_local_date, tz)}`;
 
   return (
-    <section ref={rootRef} className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
+    <section ref={rootRef} className="flex min-h-0 flex-1 flex-col gap-2.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
             Moon calendar
           </h3>
-          <p className="mt-0.5 text-xs text-slate-200/78">Major phases</p>
+          <p className="mt-1 text-sm font-semibold tracking-tight text-slate-50">
+            Major phases
+          </p>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-1.5 py-1">
           <button
@@ -95,7 +101,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           >
             &lt;
           </button>
-          <p className="min-w-[7.5rem] text-center text-[10px] uppercase tracking-[0.16em] text-slate-300/62">
+          <p className="min-w-[7.25rem] text-center text-[10px] uppercase tracking-[0.15em] text-slate-300/62">
             {rangeLabel}
           </p>
           <button
@@ -112,7 +118,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5 text-[9px] uppercase tracking-[0.16em] text-slate-400/76">
+      <div className="grid grid-cols-7 gap-0.5 text-[9px] uppercase tracking-[0.15em] text-slate-400/76">
         {dayLabels.map((label, index) => (
           <div key={`${label}-${index}`} className="px-1 text-center">
             {label}
@@ -140,7 +146,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           return (
             <div
               key={day.date_local}
-              className={`relative flex h-[2.7rem] flex-col rounded-lg border px-1.5 py-1 transition ${
+              className={`relative flex h-[2.85rem] flex-col rounded-lg border px-1.5 py-1 transition ${
                 primaryEntry
                   ? "border-sky-300/32 bg-sky-400/8 shadow-[0_0_0_1px_rgba(125,211,252,0.04)]"
                   : "border-white/8 bg-slate-950/30"
