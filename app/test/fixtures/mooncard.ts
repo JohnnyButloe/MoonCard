@@ -9,7 +9,10 @@ import type {
   MoonCardResponse,
 } from "../../lib/mooncard/types";
 import type { MoonCardPythonResponse } from "../../lib/mooncard/mapPythonResponse";
-import type { MoonPhaseWindow } from "../../providers/pyAstronomy";
+import type {
+  AstronomySummary,
+  MoonPhaseWindow,
+} from "../../providers/pyAstronomy";
 import type { WeatherNow } from "../../providers/weather";
 
 type DeepPartial<T> = {
@@ -282,6 +285,154 @@ function buildWindowDay(
     is_today: isToday,
     phases: phaseEntries,
   };
+}
+
+export function buildAstronomySummary(
+  overrides?: DeepPartial<AstronomySummary>,
+): AstronomySummary {
+  return mergeFixture(
+    {
+      meta: {
+        source: "python_service",
+        generated_at_utc: "2026-04-05T06:30:00Z",
+        cache_key: "astronomy:test",
+        location: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          elevation_m: 0,
+          timezone: "UTC",
+          timezone_offset: "+00:00",
+        },
+        date: {
+          current_utc: "2026-04-05T06:30:00Z",
+          current_local: "2026-04-05T06:30:00+00:00",
+          local_date: "2026-04-05",
+          previous_local_date: "2026-04-04",
+          next_local_date: "2026-04-06",
+        },
+      },
+      moon: {
+        current: {
+          observed_at_utc: "2026-04-05T06:30:00Z",
+          observed_at_local: "2026-04-05T06:30:00+00:00",
+          altitude_deg: 32.4,
+          azimuth_deg: 143.2,
+          illumination_frac: 0.74,
+          illumination_pct: 74,
+          phase_angle_deg: 134.8,
+          bright_limb_angle_deg: 45.3,
+          phase_name: "Waxing Gibbous",
+          waxing: true,
+          distance_km: 405123,
+          above_horizon: true,
+        },
+        events: {
+          rise_local: "2026-04-05T01:15:00+00:00",
+          set_local: "2026-04-05T13:45:00+00:00",
+          high_moon_local: "2026-04-05T07:20:00+00:00",
+          low_moon_local: "2026-04-05T19:50:00+00:00",
+          previous_rise_local: "2026-04-04T00:48:00+00:00",
+          previous_set_local: "2026-04-04T12:58:00+00:00",
+          today: {
+            rise_local: "2026-04-05T01:15:00+00:00",
+            set_local: "2026-04-05T13:45:00+00:00",
+            high_moon_local: "2026-04-05T07:20:00+00:00",
+            low_moon_local: "2026-04-05T19:50:00+00:00",
+            phase_name: "Waxing Gibbous",
+          },
+          previous_day: {
+            rise_local: "2026-04-04T00:48:00+00:00",
+            set_local: "2026-04-04T12:58:00+00:00",
+            high_moon_local: "2026-04-04T06:34:00+00:00",
+            low_moon_local: "2026-04-04T18:58:00+00:00",
+            phase_name: "Waxing Gibbous",
+          },
+          next_day: {
+            rise_local: "2026-04-06T01:42:00+00:00",
+            set_local: "2026-04-06T14:31:00+00:00",
+            high_moon_local: "2026-04-06T08:04:00+00:00",
+            low_moon_local: "2026-04-06T20:34:00+00:00",
+            phase_name: "Waxing Gibbous",
+          },
+        },
+      },
+      sun: {
+        current: {
+          observed_at_utc: "2026-04-05T06:30:00Z",
+          observed_at_local: "2026-04-05T06:30:00+00:00",
+          altitude_deg: -12.4,
+          azimuth_deg: 73.2,
+          above_horizon: false,
+        },
+        events: {
+          sunrise_local: "2026-04-05T06:42:00+00:00",
+          sunset_local: "2026-04-05T19:15:00+00:00",
+        },
+        path: {
+          window_start_local: "2026-04-05T00:26:00+00:00",
+          window_end_local: "2026-04-06T01:31:00+00:00",
+          sample_count: 220,
+          samples: [
+            {
+              time_utc: "2026-04-05T00:26:00Z",
+              time_local: "2026-04-05T00:26:00+00:00",
+              altitude_deg: -42.1,
+              azimuth_deg: 335.8,
+            },
+            {
+              time_utc: "2026-04-05T12:58:30Z",
+              time_local: "2026-04-05T12:58:30+00:00",
+              altitude_deg: 41.7,
+              azimuth_deg: 179.3,
+            },
+            {
+              time_utc: "2026-04-06T01:31:00Z",
+              time_local: "2026-04-06T01:31:00+00:00",
+              altitude_deg: -39.4,
+              azimuth_deg: 25.4,
+            },
+          ],
+        },
+      },
+      twilight: {
+        timezone_offset: "+00:00",
+        current_phase: "astronomical",
+        next_transition_local: "2026-04-05T05:55:00+00:00",
+        segments: [
+          {
+            phase: "dark",
+            start_local: "2026-04-05T00:00:00+00:00",
+            end_local: "2026-04-05T05:12:00+00:00",
+          },
+          {
+            phase: "astronomical",
+            start_local: "2026-04-05T05:12:00+00:00",
+            end_local: "2026-04-05T05:42:00+00:00",
+          },
+          {
+            phase: "nautical",
+            start_local: "2026-04-05T05:42:00+00:00",
+            end_local: "2026-04-05T06:15:00+00:00",
+          },
+          {
+            phase: "civil",
+            start_local: "2026-04-05T06:15:00+00:00",
+            end_local: "2026-04-05T06:42:00+00:00",
+          },
+          {
+            phase: "day",
+            start_local: "2026-04-05T06:42:00+00:00",
+            end_local: "2026-04-05T19:15:00+00:00",
+          },
+        ],
+        sun_events: {
+          sunrise_local: "2026-04-05T06:42:00+00:00",
+          sunset_local: "2026-04-05T19:15:00+00:00",
+        },
+      },
+    } satisfies AstronomySummary,
+    overrides,
+  );
 }
 
 export function buildMoonPhaseWindow(
