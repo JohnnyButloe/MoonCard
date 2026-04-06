@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from time import perf_counter
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from skyfield import almanac
 from skyfield.api import wgs84
 
 from app.python_service.moon import MoonEvents, moon_events_for_date, resolve_tz
 from app.python_service.moon_ephem import get_runtime, moon_now
+from app.python_service.observability import log_event
 from app.python_service.sun import SunEvents, sun_events_for_date
 from app.python_service.twilight import twilight_segments_for_date
 
@@ -140,6 +141,40 @@ def _run_timed(
     result = func(*args, **kwargs)
     timings[label] = round((perf_counter() - start) * 1000, 2)
     return result
+
+
+def _cache_call(
+    func: Callable[..., Dict[str, Any]],
+    *args: Any,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    before = func.cache_info()
+    result = func(*args)
+    after = func.cache_info()
+    status = "unknown"
+    if after.hits > before.hits:
+        status = "hit"
+    elif after.misses > before.misses:
+        status = "miss"
+
+    return result, {
+        "status": status,
+        "hits": after.hits,
+        "misses": after.misses,
+        "size": after.currsize,
+        "max_size": after.maxsize,
+    }
+
+
+def _run_cached_timed(
+    timings: Dict[str, float],
+    label: str,
+    func: Callable[..., Dict[str, Any]],
+    *args: Any,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    start = perf_counter()
+    result, cache_info = _cache_call(func, *args)
+    timings[label] = round((perf_counter() - start) * 1000, 2)
+    return result, cache_info
 
 
 def _moon_event_payload(events: MoonEvents) -> Dict[str, Optional[str]]:
@@ -434,8 +469,10 @@ def astronomy_summary(
     date_iso: Optional[str] = None,
     elev_m: float = 0.0,
     sun_path_samples: int = DEFAULT_SUN_PATH_SAMPLES,
+    request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     timings: Dict[str, float] = {}
+    cache_details: Dict[str, Dict[str, Any]] = {}
     total_started = perf_counter()
     sample_count = max(2, int(sun_path_samples))
     context = _run_timed(
@@ -450,7 +487,7 @@ def astronomy_summary(
         datetime_iso=datetime_iso,
     )
 
-    today_bundle = _run_timed(
+    today_bundle, cache_details["today_bundle"] = _run_cached_timed(
         timings,
         "today_bundle_ms",
         _daily_bundle_cached,
@@ -459,7 +496,7 @@ def astronomy_summary(
         context["timezone"],
         context["local_date"],
     )
-    previous_bundle = _run_timed(
+    previous_bundle, cache_details["previous_bundle"] = _run_cached_timed(
         timings,
         "previous_bundle_ms",
         _daily_bundle_cached,
@@ -468,7 +505,7 @@ def astronomy_summary(
         context["timezone"],
         context["previous_local_date"],
     )
-    next_bundle = _run_timed(
+    next_bundle, cache_details["next_bundle"] = _run_cached_timed(
         timings,
         "next_bundle_ms",
         _daily_bundle_cached,
@@ -477,7 +514,7 @@ def astronomy_summary(
         context["timezone"],
         context["next_local_date"],
     )
-    sun_path = _run_timed(
+    sun_path, cache_details["sun_path"] = _run_cached_timed(
         timings,
         "sun_path_ms",
         _sun_path_cached,
@@ -568,6 +605,7 @@ def astronomy_summary(
                         sample_count,
                     ),
                 },
+                "cache": {},
             },
             "location": {
                 "latitude": context["lat_key"],
@@ -635,6 +673,20 @@ def astronomy_summary(
         **timings,
         "total_ms": round((perf_counter() - total_started) * 1000, 2),
     }
+    response["meta"]["performance"]["cache"] = cache_details
+    log_event(
+        "info",
+        "astronomy_summary_complete",
+        request_id=request_id,
+        cache_key=cache_key,
+        timezone=context["timezone"],
+        local_date=context["local_date"],
+        lat_key=context["lat_key"],
+        lon_key=context["lon_key"],
+        duration_ms=response["meta"]["performance"]["timings_ms"]["total_ms"],
+        timings_ms=response["meta"]["performance"]["timings_ms"],
+        cache=response["meta"]["performance"]["cache"],
+    )
     return response
 
 
@@ -728,9 +780,29 @@ def moon_phase_window(
     tz_name: Optional[str],
     start_date_iso: Optional[str] = None,
     window_days: int = DEFAULT_PHASE_WINDOW_DAYS,
+    request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     tz_local = resolve_tz(tz_name, 0.0)
     normalized_tz_name = _timezone_name(tz_local)
     if start_date_iso is None:
         start_date_iso = datetime.now(timezone.utc).astimezone(tz_local).date().isoformat()
-    return _phase_window_cached(normalized_tz_name, start_date_iso, max(1, int(window_days)))
+    total_started = perf_counter()
+    payload, cache_info = _cache_call(
+        _phase_window_cached,
+        normalized_tz_name,
+        start_date_iso,
+        max(1, int(window_days)),
+    )
+    duration_ms = round((perf_counter() - total_started) * 1000, 2)
+    log_event(
+        "info",
+        "moon_phase_window_complete",
+        request_id=request_id,
+        cache_key=payload["meta"]["cache_key"],
+        timezone=payload["meta"]["timezone"],
+        window_start_local_date=payload["meta"]["window_start_local_date"],
+        window_days=payload["meta"]["window_days"],
+        duration_ms=duration_ms,
+        cache=cache_info,
+    )
+    return payload

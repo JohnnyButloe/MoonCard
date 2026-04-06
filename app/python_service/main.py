@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from time import perf_counter
 
 from app.python_service.astronomy import astronomy_summary, moon_phase_window
 # Keep using the existing "now" implementation from the ephemeris helper.
 from app.python_service.moon_ephem import moon_now, warm_runtime
+from app.python_service.observability import REQUEST_ID_HEADER, log_event
 # Use the new local-day events implementation.
 from app.python_service.moon import moon_events_for_date, MoonEvents
 
@@ -17,12 +20,45 @@ from app.python_service.routes.mooncard import router as mooncard_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    started_at = perf_counter()
     warm_runtime()
+    log_event(
+        "info",
+        "python_runtime_warmed",
+        duration_ms=round((perf_counter() - started_at) * 1000, 2),
+    )
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(mooncard_router)
+
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next):
+    request_id = (
+        request.headers.get(REQUEST_ID_HEADER, "").strip()[:200] or str(uuid4())
+    )
+    request.state.request_id = request_id
+    started_at = perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        log_event(
+            "error",
+            "python_request_failed",
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            error_name=type(exc).__name__,
+            error_message=str(exc),
+        )
+        raise
+
+    response.headers[REQUEST_ID_HEADER] = request_id
+    return response
 
 
 @app.get("/moon/now")
@@ -157,6 +193,7 @@ def api_sun_events(
 
 @app.get("/astronomy/summary")
 def api_astronomy_summary(
+    request: Request,
     lat: float = Query(..., ge=-90.0, le=90.0),
     lon: float = Query(..., ge=-180.0, le=180.0),
     tz: str = Query(..., min_length=1, description="IANA timezone name"),
@@ -195,11 +232,13 @@ def api_astronomy_summary(
         date_iso=date_iso,
         elev_m=elev,
         sun_path_samples=sun_path_samples,
+        request_id=request.state.request_id,
     )
 
 
 @app.get("/astronomy/phases")
 def api_moon_phase_window(
+    request: Request,
     tz: str = Query(..., min_length=1, description="IANA timezone name"),
     start_date_iso: Optional[str] = Query(
         None,
@@ -222,4 +261,5 @@ def api_moon_phase_window(
         tz_name=tz,
         start_date_iso=start_date_iso,
         window_days=window_days,
+        request_id=request.state.request_id,
     )

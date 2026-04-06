@@ -7,6 +7,13 @@ import {
   DEFAULT_TIMEOUT_MS,
 } from "../../lib/apiUtils";
 import {
+  durationMsFrom,
+  getOrCreateRequestId,
+  isAbortLikeError,
+  logServerEvent,
+  withRequestIdHeaders,
+} from "../../lib/serverObservability";
+import {
   AstronomySummarySchema,
   MoonPhaseWindowSchema,
   PhasesQuerySchema,
@@ -32,21 +39,24 @@ function getPyRootUrl(): string | null {
   return baseUrl.replace(/\/moon\/?$/, "");
 }
 
-function getRequestId(req: NextRequest): string {
-  const incomingId = req.headers.get("x-request-id")?.trim();
-  if (incomingId) {
-    return incomingId.slice(0, 200);
-  }
-  return crypto.randomUUID();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function withRequestIdHeaders(
-  headersInit: HeadersInit,
-  requestId: string,
-): Headers {
-  const headers = new Headers(headersInit);
-  headers.set("x-request-id", requestId);
-  return headers;
+function getSummaryPerformance(
+  payload: unknown,
+): Record<string, unknown> | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const meta = payload.meta;
+  if (!isRecord(meta)) {
+    return null;
+  }
+
+  const performance = meta.performance;
+  return isRecord(performance) ? performance : null;
 }
 
 function productErrorResponse(status: number, requestId: string) {
@@ -73,17 +83,15 @@ function invalidParamsResponse(
 }
 
 function logBoundaryEvent(
+  level: "info" | "warn" | "error",
   requestId: string,
   fields: Record<string, unknown>,
 ) {
-  console.error(
-    JSON.stringify({
-      level: "error",
-      route: ROUTE_PATH,
-      requestId,
-      ...fields,
-    }),
-  );
+  logServerEvent(level, {
+    route: ROUTE_PATH,
+    requestId,
+    ...fields,
+  });
 }
 
 function parseQuery(req: NextRequest) {
@@ -143,24 +151,12 @@ function hasValidUpstreamPayload(
   return schema.safeParse(payload);
 }
 
-function isAbortLikeError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    return false;
-  }
-
-  return (
-    err.name === "AbortError" ||
-    err.name === "TimeoutError" ||
-    err.message.toLowerCase().includes("abort")
-  );
-}
-
 export async function GET(req: NextRequest) {
-  const requestId = getRequestId(req);
+  const requestId = getOrCreateRequestId(req);
   const rootUrl = getPyRootUrl();
 
   if (!rootUrl) {
-    logBoundaryEvent(requestId, {
+    logBoundaryEvent("error", requestId, {
       msg: "missing-upstream-config",
     });
     return productErrorResponse(500, requestId);
@@ -168,6 +164,10 @@ export async function GET(req: NextRequest) {
 
   const parsedQuery = parseQuery(req);
   if (!parsedQuery.success) {
+    logBoundaryEvent("warn", requestId, {
+      msg: "invalid-params",
+      detail: parsedQuery.error.flatten(),
+    });
     return invalidParamsResponse(parsedQuery.error.flatten(), requestId);
   }
 
@@ -187,14 +187,16 @@ export async function GET(req: NextRequest) {
       PY_ASTRO_TIMEOUT_MS,
     );
     const upstreamText = await upstreamResponse.text();
-    const latencyMs = Date.now() - startedAt;
+    const latencyMs = durationMsFrom(startedAt);
+    const upstreamRequestId = upstreamResponse.headers.get("x-request-id");
 
     if (!upstreamResponse.ok) {
-      logBoundaryEvent(requestId, {
+      logBoundaryEvent("error", requestId, {
         msg: "upstream-non-ok",
-        latencyMs,
+        durationMs: latencyMs,
         mode: parsedQuery.data.mode,
         upstreamStatus: upstreamResponse.status,
+        upstreamRequestId,
         upstreamUrl: upstreamUrl.toString(),
         upstreamBodyPreview: upstreamText.slice(0, 500),
       });
@@ -203,10 +205,11 @@ export async function GET(req: NextRequest) {
 
     const parsedJson = parseUpstreamJson(upstreamText);
     if (!parsedJson.ok) {
-      logBoundaryEvent(requestId, {
+      logBoundaryEvent("error", requestId, {
         msg: "upstream-invalid-json",
-        latencyMs,
+        durationMs: latencyMs,
         mode: parsedQuery.data.mode,
+        upstreamRequestId,
         upstreamUrl: upstreamUrl.toString(),
         upstreamBodyPreview: upstreamText.slice(0, 500),
       });
@@ -218,10 +221,11 @@ export async function GET(req: NextRequest) {
       parsedJson.data,
     );
     if (!validatedPayload.success) {
-      logBoundaryEvent(requestId, {
+      logBoundaryEvent("error", requestId, {
         msg: "upstream-invalid-payload",
-        latencyMs,
+        durationMs: latencyMs,
         mode: parsedQuery.data.mode,
+        upstreamRequestId,
         upstreamUrl: upstreamUrl.toString(),
         issues: validatedPayload.error.issues.map((issue) => ({
           path: issue.path.join("."),
@@ -231,16 +235,32 @@ export async function GET(req: NextRequest) {
       return productErrorResponse(502, requestId);
     }
 
+    const summaryPerformance = getSummaryPerformance(parsedJson.data);
+    logBoundaryEvent("info", requestId, {
+      msg: "request-complete",
+      mode: parsedQuery.data.mode,
+      durationMs: latencyMs,
+      upstreamStatus: upstreamResponse.status,
+      upstreamRequestId,
+      pythonTotalMs:
+        isRecord(summaryPerformance?.timings_ms) &&
+        typeof summaryPerformance.timings_ms.total_ms === "number"
+          ? summaryPerformance.timings_ms.total_ms
+          : null,
+      pythonCache:
+        isRecord(summaryPerformance?.cache) ? summaryPerformance.cache : null,
+    });
+
     return NextResponse.json(parsedJson.data, {
       headers: withRequestIdHeaders(cacheHeaders(), requestId),
     });
   } catch (err: unknown) {
-    const latencyMs = Date.now() - startedAt;
+    const latencyMs = durationMsFrom(startedAt);
     const status = isAbortLikeError(err) ? 504 : 502;
 
-    logBoundaryEvent(requestId, {
+    logBoundaryEvent("error", requestId, {
       msg: status === 504 ? "upstream-timeout" : "upstream-network-failure",
-      latencyMs,
+      durationMs: latencyMs,
       mode: parsedQuery.data.mode,
       upstreamUrl: upstreamUrl.toString(),
       errorName: err instanceof Error ? err.name : "UnknownError",

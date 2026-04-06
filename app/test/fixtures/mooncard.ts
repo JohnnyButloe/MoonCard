@@ -296,6 +296,53 @@ export function buildAstronomySummary(
         source: "python_service",
         generated_at_utc: "2026-04-05T06:30:00Z",
         cache_key: "astronomy:test",
+        performance: {
+          timings_ms: {
+            context_ms: 0.2,
+            today_bundle_ms: 1.3,
+            previous_bundle_ms: 0.4,
+            next_bundle_ms: 0.5,
+            sun_path_ms: 2.2,
+            moon_current_ms: 1.1,
+            sun_current_ms: 0.8,
+            assembly_ms: 0.1,
+            total_ms: 6.6,
+          },
+          cache_keys: {
+            summary_bundle: "astronomy:test",
+            sun_path: "astronomy-sun-path:test",
+          },
+          cache: {
+            today_bundle: {
+              status: "hit",
+              hits: 4,
+              misses: 1,
+              size: 3,
+              max_size: 1024,
+            },
+            previous_bundle: {
+              status: "hit",
+              hits: 5,
+              misses: 1,
+              size: 3,
+              max_size: 1024,
+            },
+            next_bundle: {
+              status: "miss",
+              hits: 5,
+              misses: 2,
+              size: 4,
+              max_size: 1024,
+            },
+            sun_path: {
+              status: "hit",
+              hits: 8,
+              misses: 2,
+              size: 1,
+              max_size: 256,
+            },
+          },
+        },
         location: {
           latitude: 40.7128,
           longitude: -74.006,

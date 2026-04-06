@@ -7,6 +7,13 @@ import {
   DEFAULT_TIMEOUT_MS,
   DEFAULT_TTL_SECONDS,
 } from "../../../lib/apiUtils";
+import {
+  durationMsFrom,
+  getOrCreateRequestId,
+  isAbortLikeError,
+  logServerEvent,
+  withRequestIdHeaders,
+} from "../../../lib/serverObservability";
 
 type WeatherCondition =
   | "clear"
@@ -53,6 +60,7 @@ function toFiniteNumber(value: unknown): number | undefined {
 }
 
 export async function GET(req: NextRequest) {
+  const requestId = getOrCreateRequestId(req);
   const { searchParams } = new URL(req.url);
   const parsed = z
     .object({
@@ -65,9 +73,15 @@ export async function GET(req: NextRequest) {
     });
 
   if (!parsed.success) {
+    logServerEvent("warn", {
+      route: "/api/weather/current",
+      requestId,
+      msg: "invalid-params",
+      detail: parsed.error.flatten(),
+    });
     return NextResponse.json(
       { error: "invalid-params", detail: parsed.error.flatten() },
-      { status: 400, headers: noStoreHeaders },
+      { status: 400, headers: withRequestIdHeaders(noStoreHeaders, requestId) },
     );
   }
 
@@ -95,36 +109,63 @@ export async function GET(req: NextRequest) {
       DEFAULT_TIMEOUT_MS,
     );
     const text = await res.text();
-    const latencyMs = Date.now() - start;
+    const latencyMs = durationMsFrom(start);
+    const upstreamRequestId = res.headers.get("x-request-id");
 
     if (!res.ok) {
-      console.error(
-        JSON.stringify({
-          level: "error",
-          route: "/api/weather/current",
-          msg: "upstream-failed",
-          status: res.status,
-          latencyMs,
-          url: upstream.toString(),
-          body: text.slice(0, 500),
-        }),
-      );
+      logServerEvent("error", {
+        route: "/api/weather/current",
+        requestId,
+        msg: "upstream-failed",
+        durationMs: latencyMs,
+        upstreamStatus: res.status,
+        upstreamRequestId,
+        upstreamUrl: upstream.toString(),
+        upstreamBodyPreview: text.slice(0, 500),
+      });
       return NextResponse.json(
         { error: "weather-upstream-failed", status: res.status },
-        { status: 502, headers: noStoreHeaders },
+        { status: 502, headers: withRequestIdHeaders(noStoreHeaders, requestId) },
       );
     }
 
-    const json: unknown = JSON.parse(text);
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      logServerEvent("error", {
+        route: "/api/weather/current",
+        requestId,
+        msg: "upstream-invalid-json",
+        durationMs: latencyMs,
+        upstreamStatus: res.status,
+        upstreamRequestId,
+        upstreamUrl: upstream.toString(),
+        upstreamBodyPreview: text.slice(0, 500),
+      });
+      return NextResponse.json(
+        { error: "weather-invalid-response" },
+        { status: 502, headers: withRequestIdHeaders(noStoreHeaders, requestId) },
+      );
+    }
     const current =
       typeof json === "object" && json !== null && "current" in json
         ? (json as { current?: Record<string, unknown> }).current
         : undefined;
 
     if (!current) {
+      logServerEvent("error", {
+        route: "/api/weather/current",
+        requestId,
+        msg: "upstream-missing-current",
+        durationMs: latencyMs,
+        upstreamStatus: res.status,
+        upstreamRequestId,
+        upstreamUrl: upstream.toString(),
+      });
       return NextResponse.json(
         { error: "weather-missing-current" },
-        { status: 502, headers: noStoreHeaders },
+        { status: 502, headers: withRequestIdHeaders(noStoreHeaders, requestId) },
       );
     }
 
@@ -144,6 +185,17 @@ export async function GET(req: NextRequest) {
       weatherCode,
     });
 
+    logServerEvent("info", {
+      route: "/api/weather/current",
+      requestId,
+      msg: "request-complete",
+      durationMs: latencyMs,
+      upstreamStatus: res.status,
+      upstreamRequestId,
+      condition,
+      weatherCode,
+    });
+
     return NextResponse.json(
       {
         condition,
@@ -154,29 +206,24 @@ export async function GET(req: NextRequest) {
         snowfallMm,
         weatherCode,
       },
-      { headers: cacheHeaders() },
+      { headers: withRequestIdHeaders(cacheHeaders(), requestId) },
     );
   } catch (err: unknown) {
-    const latencyMs = Date.now() - start;
+    const latencyMs = durationMsFrom(start);
     const message = err instanceof Error ? err.message : String(err);
-    const name = err instanceof Error ? err.name : "";
-    console.error(
-      JSON.stringify({
-        level: "error",
-        route: "/api/weather/current",
-        msg: "upstream-exception",
-        latencyMs,
-        url: upstream.toString(),
-        error: message,
-      }),
-    );
-    const status =
-      name.includes("AbortError") || message.toLowerCase().includes("abort")
-        ? 504
-        : 502;
+    const status = isAbortLikeError(err) ? 504 : 502;
+    logServerEvent("error", {
+      route: "/api/weather/current",
+      requestId,
+      msg: status === 504 ? "upstream-timeout" : "upstream-network-failure",
+      durationMs: latencyMs,
+      upstreamUrl: upstream.toString(),
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      errorMessage: message,
+    });
     return NextResponse.json(
-      { error: "weather-upstream-exception", detail: message },
-      { status, headers: noStoreHeaders },
+      { error: "weather-upstream-exception" },
+      { status, headers: withRequestIdHeaders(noStoreHeaders, requestId) },
     );
   }
 }

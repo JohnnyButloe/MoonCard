@@ -51,11 +51,15 @@ describe("/api/mooncard", () => {
     expect(body.data.meta.location.label).toBe("Testville");
     expect(body.data.meta.calculation_source).toBe("python_microservice");
     expect(body.data.moon.phase_name).toBe("Waxing Gibbous");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(mockFetchMoonCardUpstream).toHaveBeenCalledWith(
       expect.objectContaining({
         pythonPayload: expect.objectContaining({
           label: "Testville",
         }),
+      }),
+      expect.objectContaining({
+        requestId: expect.any(String),
       }),
     );
   });
