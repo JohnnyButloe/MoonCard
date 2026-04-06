@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from time import perf_counter
 
 from app.python_service.astronomy import astronomy_summary, moon_phase_window
@@ -12,25 +13,87 @@ from app.python_service.moon_ephem import moon_now, warm_runtime
 from app.python_service.observability import REQUEST_ID_HEADER, log_event
 # Use the new local-day events implementation.
 from app.python_service.moon import moon_events_for_date, MoonEvents
+from app.python_service.settings import (
+    SettingsLoadError,
+    get_settings,
+    runtime_settings_summary,
+    validate_startup_settings,
+)
 
 from app.python_service.twilight import twilight_for_date
 from app.python_service.sun import sun_events_for_date, SunEvents
 from app.python_service.routes.mooncard import router as mooncard_router
 
 
+def _base_readiness_state() -> dict[str, object]:
+    return {
+        "started": False,
+        "ready": False,
+        "checks": {
+            "settings": False,
+            "runtime": False,
+        },
+        "startup_error": None,
+        "startup_completed_utc": None,
+        "settings": None,
+    }
+
+
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
+    app.state.readiness = _base_readiness_state()
     started_at = perf_counter()
-    warm_runtime()
-    log_event(
-        "info",
-        "python_runtime_warmed",
-        duration_ms=round((perf_counter() - started_at) * 1000, 2),
-    )
-    yield
+    try:
+        settings = validate_startup_settings(get_settings())
+        settings_summary = runtime_settings_summary(settings)
+        app.state.readiness["started"] = True
+        app.state.readiness["checks"]["settings"] = True
+        app.state.readiness["settings"] = settings_summary
+
+        warm_runtime()
+        app.state.readiness["checks"]["runtime"] = True
+        app.state.readiness["ready"] = True
+        app.state.readiness["startup_completed_utc"] = (
+            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        )
+        log_event(
+            "info",
+            "python_startup_ready",
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            settings=settings_summary,
+        )
+        yield
+    except SettingsLoadError as exc:
+        app.state.readiness["started"] = True
+        app.state.readiness["startup_error"] = str(exc)
+        log_event(
+            "error",
+            "python_startup_failed",
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            error_message=str(exc),
+        )
+        raise RuntimeError(str(exc)) from exc
+    except Exception as exc:
+        app.state.readiness["started"] = True
+        app.state.readiness["startup_error"] = str(exc)
+        log_event(
+            "error",
+            "python_startup_failed",
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            error_name=type(exc).__name__,
+            error_message=str(exc),
+        )
+        raise
+    finally:
+        if hasattr(app.state, "readiness"):
+            app.state.readiness["ready"] = False
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="MoonCard Python Service",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 app.include_router(mooncard_router)
 
 
@@ -59,6 +122,35 @@ async def attach_request_id(request: Request, call_next):
 
     response.headers[REQUEST_ID_HEADER] = request_id
     return response
+
+
+@app.get("/healthz", include_in_schema=False)
+def api_healthz(request: Request):
+    settings_summary = getattr(request.app.state, "readiness", {}).get("settings")
+    return {
+        "ok": True,
+        "service": "mooncard-python",
+        "environment": (
+            settings_summary.get("app_env")
+            if isinstance(settings_summary, dict)
+            else "unknown"
+        ),
+    }
+
+
+@app.get("/readyz", include_in_schema=False)
+def api_readyz(request: Request):
+    readiness = getattr(request.app.state, "readiness", _base_readiness_state())
+    status_code = 200 if readiness.get("ready") else 503
+    payload = {
+        "started": bool(readiness.get("started")),
+        "ok": bool(readiness.get("ready")),
+        "service": "mooncard-python",
+        "checks": readiness.get("checks"),
+        "startup_error": readiness.get("startup_error"),
+        "startup_completed_utc": readiness.get("startup_completed_utc"),
+    }
+    return JSONResponse(payload, status_code=status_code)
 
 
 @app.get("/moon/now")

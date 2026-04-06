@@ -28,6 +28,78 @@ That note explains the canonical request/response contracts, deterministic
 date/time normalization, the Next.js application boundary, and the Python
 calculation-service role.
 
+## Python Service Runtime
+
+Local development:
+
+```bash
+npm run dev:api
+```
+
+That keeps the FastAPI app easy to run with reload and uses sensible defaults:
+`127.0.0.1:8001`, one worker, and the bundled Skyfield ephemeris under
+[`app/python_service/skyfield-data`](app/python_service/skyfield-data).
+
+Production-oriented startup:
+
+```bash
+npm run start:api
+```
+
+That path uses the typed Python settings layer, validates startup inputs before
+serving traffic, warms the Skyfield runtime during app startup, and applies the
+configured Uvicorn worker/shutdown settings.
+
+Validate config without starting the server:
+
+```bash
+npm run check:api-config
+```
+
+### Required Runtime Assets
+
+The Python service requires a readable Skyfield data directory and ephemeris
+file. By default it uses:
+
+- `app/python_service/skyfield-data`
+- `de421.bsp`
+
+If either path is missing or invalid, the service fails clearly during startup
+with an actionable configuration error.
+
+### Environment Variables
+
+The Python service reads these settings from the environment:
+
+- `MOONCARD_PY_APP_ENV`: `development`, `test`, or `production`. Default: `development`
+- `MOONCARD_PY_HOST`: bind host for the production runner. Default: `127.0.0.1`
+- `MOONCARD_PY_PORT`: bind port for the production runner. Falls back to `PORT`. Default: `8001`
+- `MOONCARD_PY_LOG_LEVEL`: `critical`, `error`, `warning`, `info`, `debug`, or `trace`. Default: `info`
+- `MOONCARD_PY_WEB_CONCURRENCY`: worker count for the production runner. Falls back to `WEB_CONCURRENCY`
+- `MOONCARD_PY_LIMIT_CONCURRENCY`: optional per-worker concurrency limit for Uvicorn
+- `MOONCARD_PY_TIMEOUT_KEEP_ALIVE_SECONDS`: Uvicorn keep-alive timeout. Default: `5`
+- `MOONCARD_PY_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS`: graceful shutdown timeout. Default: `15`
+- `MOONCARD_PY_SKYFIELD_DATA_DIR`: optional override for the Skyfield data directory. Falls back to `SKYFIELD_DATA_DIR`
+- `MOONCARD_PY_SKYFIELD_EPHEMERIS_FILE`: ephemeris filename inside the Skyfield data directory. Default: `de421.bsp`
+
+Worker strategy:
+
+- In `development` and `test`, the default worker count is `1`
+- In `production`, the default is `min(cpu_count, 4)` unless `MOONCARD_PY_WEB_CONCURRENCY` is set
+
+### Health And Readiness
+
+The Python service exposes:
+
+- `/healthz`: process-level liveness
+- `/readyz`: startup/readiness state, including whether validated settings and the warmed astronomy runtime are ready
+
+The service only reports ready after:
+
+1. settings load and validate successfully
+2. the Skyfield data directory + ephemeris file exist
+3. the shared astronomy runtime is warmed during FastAPI startup
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

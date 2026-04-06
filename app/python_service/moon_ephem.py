@@ -21,16 +21,15 @@ so that the FastAPI routes and the frontend do not need to change.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from skyfield import almanac
 from skyfield.api import Loader, wgs84
 from skyfield.trigonometry import position_angle_of
+from app.python_service.settings import get_settings
 
 
 @dataclass(frozen=True)
@@ -41,21 +40,14 @@ class AstronomyRuntime:
     moon: Any
     sun: Any
 
-
-def _skyfield_data_dir() -> str:
-    data_dir = os.environ.get("SKYFIELD_DATA_DIR")
-    if data_dir is not None:
-        return data_dir
-    return str(Path(__file__).resolve().parent / "skyfield-data")
-
-
 @lru_cache(maxsize=1)
 def get_runtime() -> AstronomyRuntime:
     # Keep Skyfield ephemeris loading at process startup / first-use instead of
     # rebuilding it inside request handlers.
-    loader = Loader(_skyfield_data_dir())
+    settings = get_settings()
+    loader = Loader(str(settings.skyfield_data_dir))
     ts = loader.timescale()
-    eph = loader("de421.bsp")
+    eph = loader(settings.skyfield_ephemeris_file)
     return AstronomyRuntime(
         ts=ts,
         eph=eph,
