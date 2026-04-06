@@ -21,12 +21,25 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setClockNow(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [tz]);
+
+  const todayDateIso = useMemo(
+    () => formatInTimeZone(new Date(clockNow), tz, "yyyy-MM-dd"),
+    [clockNow, tz],
+  );
 
   const startDateIso = useMemo(() => {
-    const todayIso = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
-    const todayAnchor = fromZonedTime(`${todayIso}T12:00:00`, tz);
+    const todayAnchor = fromZonedTime(`${todayDateIso}T12:00:00`, tz);
     return formatInTimeZone(addDays(todayAnchor, weekOffset * 7), tz, "yyyy-MM-dd");
-  }, [tz, weekOffset]);
+  }, [todayDateIso, tz, weekOffset]);
 
   const phaseWindowQ = useMoonPhaseWindow(tz, startDateIso, WINDOW_DAYS);
 

@@ -65,6 +65,7 @@ describe("DashboardClient", () => {
       current: null,
       isLocating: false,
       hasCompletedOnboarding: true,
+      selectCurrentLocation: vi.fn(),
       selectLocation: vi.fn(),
     });
 
@@ -88,6 +89,7 @@ describe("DashboardClient", () => {
       current: null,
       isLocating: false,
       hasCompletedOnboarding: true,
+      selectCurrentLocation: vi.fn(),
       selectLocation: vi.fn(),
     });
 
@@ -103,5 +105,44 @@ describe("DashboardClient", () => {
 
     expect(screen.getByText("Change the dashboard location")).toBeInTheDocument();
     expect(screen.getByText("location-search")).toBeInTheDocument();
+  });
+
+  it("uses the live current location path instead of saving a static copy", () => {
+    const selectCurrentLocation = vi.fn();
+    const selectLocation = vi.fn();
+
+    mockUseLocation.mockReturnValue({
+      active: {
+        ...fallbackLocation,
+        latitude: Number.NaN,
+        longitude: Number.NaN,
+      },
+      tz: "",
+      current: {
+        id: "current",
+        label: "Brooklyn, New York, United States",
+        latitude: 40.7128,
+        longitude: -74.006,
+        tz: "America/New_York",
+        source: "current",
+      },
+      isLocating: false,
+      hasCompletedOnboarding: true,
+      selectCurrentLocation,
+      selectLocation,
+    });
+
+    render(<DashboardClient fallback={fallbackLocation} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Set location" })[0]);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Brooklyn, New York, United States/i,
+      }),
+    );
+
+    expect(selectCurrentLocation).toHaveBeenCalledTimes(1);
+    expect(selectLocation).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith("/dashboard");
   });
 });

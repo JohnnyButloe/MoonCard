@@ -1,4 +1,3 @@
-import { keepPreviousData } from "@tanstack/react-query";
 import { fetchWeatherNow, type WeatherNow } from "../providers/weather";
 
 export function weatherNowQueryOptions({
@@ -18,7 +17,6 @@ export function weatherNowQueryOptions({
     queryFn: async () => fetchWeatherNow(lat, lon, baseUrl),
     refetchInterval: 10 * 60 * 1000,
     staleTime: 5 * 60 * 1000,
-    placeholderData: keepPreviousData,
   };
 }
 
