@@ -1,4 +1,3 @@
-import { keepPreviousData } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 
 import {
@@ -40,17 +39,17 @@ export function moonCardQueryOptions(args: MoonCardQueryArgs) {
       args.lat,
       args.lon,
       args.tz,
-      args.label ?? null,
       args.requestOrigin ?? "dashboard",
       // Key by local calendar day so client caching lines up with the same
       // location-day unit we can reuse later for normalized server-side caches.
+      // The human label is intentionally excluded so late reverse-geocode or
+      // rename updates do not cause location-stable dashboard panels to flash.
       formatInTimeZone(new Date(), args.tz, "yyyy-MM-dd"),
     ],
     enabled,
     queryFn: async (): Promise<MoonCardResponse> => fetchMoonCard(toFetchArgs(args)),
     refetchInterval: 60_000,
     staleTime: 30_000,
-    placeholderData: keepPreviousData,
   };
 }
 

@@ -59,9 +59,10 @@ def test_mooncard_route_returns_canonical_response(monkeypatch) -> None:
         errors=[],
     )
 
-    def fake_build_mooncard_response(request):
+    def fake_build_mooncard_response(request, request_id=None):
         assert request.label == "New York"
         assert request.timestamp_iso == "2026-04-03T01:30:00Z"
+        assert request_id is not None
         return expected_response
 
     monkeypatch.setattr(

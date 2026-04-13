@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:api": "uvicorn app.python_service.main:app --reload",
+    "start:api": "python3 -m app.python_service.server",
+    "check:api-config": "python3 -m app.python_service.settings",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:api\"",
     "build": "next build",
     "start": "next start",

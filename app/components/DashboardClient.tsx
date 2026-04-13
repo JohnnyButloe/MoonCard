@@ -29,11 +29,18 @@ function DashboardContent({
     current,
     isLocating,
     hasCompletedOnboarding,
+    selectCurrentLocation,
     selectLocation,
   } = useLocation();
 
   const handleSelectLocation = (location: StoredLocation) => {
     selectLocation(location);
+    router.push("/dashboard");
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!current) return;
+    selectCurrentLocation();
     router.push("/dashboard");
   };
 
@@ -51,11 +58,21 @@ function DashboardContent({
   }, [isLocationEditorOpen]);
 
   if (initialView === "landing") {
-    return <LocationOnboarding onSelect={handleSelectLocation} />;
+    return (
+      <LocationOnboarding
+        onSelect={handleSelectLocation}
+        onUseCurrentLocation={handleUseCurrentLocation}
+      />
+    );
   }
 
   if (!hasCompletedOnboarding) {
-    return <LocationOnboarding onSelect={handleSelectLocation} />;
+    return (
+      <LocationOnboarding
+        onSelect={handleSelectLocation}
+        onUseCurrentLocation={handleUseCurrentLocation}
+      />
+    );
   }
 
   const hasActiveLocation =
@@ -99,12 +116,7 @@ function DashboardContent({
                 disabled={!current}
                 onClick={() => {
                   if (!current) return;
-                  handleSelectLocation({
-                    label: current.label,
-                    latitude: current.latitude,
-                    longitude: current.longitude,
-                    tz: current.tz,
-                  });
+                  handleUseCurrentLocation();
                   setIsLocationEditorOpen(false);
                 }}
                 className={`w-full rounded-[1.5rem] border px-4 py-3 text-left transition ${
@@ -189,7 +201,7 @@ function DashboardContent({
               </section>
               <section className="flex min-w-0 xl:col-span-5">
                 <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-                  <MoonPhaseCalendar tz={tz} />
+                  <MoonPhaseCalendar key={tz} tz={tz} />
                 </div>
               </section>
             </div>

@@ -1,4 +1,3 @@
-import { keepPreviousData } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   fetchAstronomySummary,
@@ -39,7 +38,6 @@ export function astronomySummaryQueryOptions({
     },
     refetchInterval: 60_000,
     staleTime: 30_000,
-    placeholderData: keepPreviousData,
   };
 }
 
@@ -67,7 +65,6 @@ export function moonPhaseWindowQueryOptions({
     queryFn: async (): Promise<MoonPhaseWindow> =>
       fetchMoonPhaseWindow(tz, startDateIso, windowDays, baseUrl),
     staleTime: 30 * 60 * 1000,
-    placeholderData: keepPreviousData,
   };
 }
 

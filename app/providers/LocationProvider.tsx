@@ -42,6 +42,7 @@ type LocationContextValue = {
   setActiveById: (id: string) => void;
   setHomeFromCurrent: () => void;
   saveCurrentToList: () => void;
+  selectCurrentLocation: () => void;
   addSavedLocation: (loc: StoredLocation) => void;
   selectLocation: (loc: StoredLocation) => void;
   removeSavedLocation: (id: string) => void;
@@ -221,6 +222,18 @@ export function LocationProvider({
     writeSavedLocations(nextStored);
     commitActiveSelection(nextActive, nextActive.id);
   };
+
+  const selectCurrentLocation = useCallback(() => {
+    if (!current) return;
+
+    commitActiveSelection(current, "current");
+    setHasCompletedOnboarding(true);
+    try {
+      localStorage.setItem(STORAGE_HAS_SELECTED_LOCATION, "true");
+    } catch {
+      // ignore
+    }
+  }, [commitActiveSelection, current]);
 
   const addSavedLocation = (loc: StoredLocation) => {
     const match = saved.find(
@@ -450,6 +463,7 @@ export function LocationProvider({
         setActiveById,
         setHomeFromCurrent,
         saveCurrentToList,
+        selectCurrentLocation,
         addSavedLocation,
         selectLocation,
         removeSavedLocation,

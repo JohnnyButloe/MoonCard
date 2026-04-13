@@ -13,6 +13,12 @@ import {
 import { normalizeMoonCardResponse } from "../../lib/mooncard/normalizeResponse";
 import { normalizeMoonCardRequest } from "../../lib/mooncard/normalizeRequest";
 import type { MoonCardApiResponse } from "../../lib/mooncard/types";
+import {
+  durationMsFrom,
+  getOrCreateRequestId,
+  logServerEvent,
+  withRequestIdHeaders,
+} from "../../lib/serverObservability";
 
 export const runtime = "nodejs";
 const ALLOW_HEADER_VALUE = "POST, OPTIONS";
@@ -21,27 +27,37 @@ function randomIncidentId(): string | null {
   return globalThis.crypto?.randomUUID?.() ?? null;
 }
 
-function routeHeaders(extra?: Record<string, string>): Record<string, string> {
-  return {
-    ...noStoreHeaders,
-    ...(extra ?? {}),
-  };
+function routeHeaders(
+  requestId: string,
+  extra?: Record<string, string>,
+): Headers {
+  return withRequestIdHeaders(
+    {
+      ...noStoreHeaders,
+      ...(extra ?? {}),
+    },
+    requestId,
+  );
 }
 
-function logRouteError(message: string, details?: Record<string, unknown> | null) {
-  console.error(
-    JSON.stringify({
-      level: "error",
+function logRouteEvent(
+  level: "info" | "warn" | "error",
+  requestId: string,
+  message: string,
+  details?: Record<string, unknown> | null,
+) {
+  logServerEvent(level, {
       route: "/api/mooncard",
+      requestId,
       msg: message,
       ...(details ?? {}),
-    }),
-  );
+    });
 }
 
 function methodNotAllowedResponse(
   request: NextRequest,
 ): NextResponse<MoonCardApiResponse> {
+  const requestId = getOrCreateRequestId(request);
   const mapped = mapMethodNotAllowedApiError({
     method: request.method,
     allowed_methods: ["POST"],
@@ -49,7 +65,7 @@ function methodNotAllowedResponse(
 
   return NextResponse.json(mapped.body, {
     status: mapped.status,
-    headers: routeHeaders({
+    headers: routeHeaders(requestId, {
       Allow: ALLOW_HEADER_VALUE,
     }),
   });
@@ -64,12 +80,18 @@ function methodNotAllowedResponse(
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<MoonCardApiResponse>> {
+  const requestId = getOrCreateRequestId(request);
+  const startedAt = Date.now();
   let requestBody: unknown;
 
   try {
     requestBody = await request.json();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    logRouteEvent("warn", requestId, "invalid-json-body", {
+      durationMs: durationMsFrom(startedAt),
+      error: message,
+    });
     const mapped = mapValidationApiError([
       {
         type: "validation",
@@ -85,25 +107,34 @@ export async function POST(
 
     return NextResponse.json(mapped.body, {
       status: mapped.status,
-      headers: routeHeaders(),
+      headers: routeHeaders(requestId),
     });
   }
 
   try {
     const normalizedRequest = normalizeMoonCardRequest(requestBody);
     if (!normalizedRequest.ok) {
+      logRouteEvent("warn", requestId, "validation-failed", {
+        durationMs: durationMsFrom(startedAt),
+        errors: normalizedRequest.errors,
+      });
       return NextResponse.json(mapValidationApiError(normalizedRequest.errors).body, {
         status: 400,
-        headers: routeHeaders(),
+        headers: routeHeaders(requestId),
       });
     }
 
-    const upstreamResult = await fetchMoonCardUpstream(normalizedRequest.value);
+    const upstreamResult = await fetchMoonCardUpstream(normalizedRequest.value, {
+      requestId,
+    });
 
     if (!upstreamResult.ok) {
       switch (upstreamResult.kind) {
         case "invalid_request_payload": {
-          logRouteError("normalization-failed", {
+          logRouteEvent("error", requestId, "normalization-failed", {
+            durationMs: durationMsFrom(startedAt),
+            upstreamDurationMs: upstreamResult.duration_ms,
+            upstreamRequestId: upstreamResult.upstream_request_id,
             details: upstreamResult.details,
           });
           const mapped = mapNormalizationApiError({
@@ -114,11 +145,13 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: routeHeaders(),
+            headers: routeHeaders(requestId),
           });
         }
         case "unconfigured": {
-          logRouteError("upstream-unconfigured");
+          logRouteEvent("error", requestId, "upstream-unconfigured", {
+            durationMs: durationMsFrom(startedAt),
+          });
           const mapped = mapInternalRouteApiError({
             message: upstreamResult.message,
             incident_id: randomIncidentId(),
@@ -126,11 +159,14 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: routeHeaders(),
+            headers: routeHeaders(requestId),
           });
         }
         case "timeout": {
-          logRouteError("upstream-timeout", {
+          logRouteEvent("error", requestId, "upstream-timeout", {
+            durationMs: durationMsFrom(startedAt),
+            upstreamDurationMs: upstreamResult.duration_ms,
+            upstreamRequestId: upstreamResult.upstream_request_id,
             details: upstreamResult.details,
           });
           const mapped = mapUpstreamTimeoutApiError({
@@ -138,12 +174,15 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: routeHeaders(),
+            headers: routeHeaders(requestId),
           });
         }
         case "bad_response":
         case "invalid_response": {
-          logRouteError("upstream-bad-response", {
+          logRouteEvent("error", requestId, "upstream-bad-response", {
+            durationMs: durationMsFrom(startedAt),
+            upstreamDurationMs: upstreamResult.duration_ms,
+            upstreamRequestId: upstreamResult.upstream_request_id,
             upstream_status: upstreamResult.upstream_status,
             details: upstreamResult.details,
           });
@@ -159,7 +198,7 @@ export async function POST(
           });
           return NextResponse.json(mapped.body, {
             status: mapped.status,
-            headers: routeHeaders(),
+            headers: routeHeaders(requestId),
           });
         }
       }
@@ -170,7 +209,10 @@ export async function POST(
       normalizedRequest.value,
     );
     if (!normalizedResponse.ok) {
-      logRouteError("response-normalization-failed", {
+      logRouteEvent("error", requestId, "response-normalization-failed", {
+        durationMs: durationMsFrom(startedAt),
+        upstreamDurationMs: upstreamResult.duration_ms,
+        upstreamRequestId: upstreamResult.upstream_request_id,
         details: normalizedResponse.errors,
       });
       const primaryError = normalizedResponse.errors[0];
@@ -183,9 +225,22 @@ export async function POST(
       });
       return NextResponse.json(mapped.body, {
         status: mapped.status,
-        headers: routeHeaders(),
+        headers: routeHeaders(requestId),
       });
     }
+
+    logRouteEvent("info", requestId, "request-complete", {
+      durationMs: durationMsFrom(startedAt),
+      upstreamDurationMs: upstreamResult.duration_ms,
+      upstreamRequestId: upstreamResult.upstream_request_id,
+      location: {
+        lat: normalizedRequest.value.pythonPayload.lat,
+        lon: normalizedRequest.value.pythonPayload.lon,
+      },
+      timezone: normalizedRequest.value.pythonPayload.timezone,
+      localDate: normalizedRequest.value.pythonPayload.local_date,
+      requestOrigin: normalizedRequest.value.requestOrigin,
+    });
 
     return NextResponse.json(
       {
@@ -194,7 +249,7 @@ export async function POST(
       },
       {
         status: 200,
-        headers: routeHeaders({
+        headers: routeHeaders(requestId, {
           Allow: ALLOW_HEADER_VALUE,
         }),
       },
@@ -209,13 +264,14 @@ export async function POST(
       },
     });
 
-    logRouteError("internal-route-error", {
+    logRouteEvent("error", requestId, "internal-route-error", {
+      durationMs: durationMsFrom(startedAt),
       error: message,
     });
 
     return NextResponse.json(mapped.body, {
       status: mapped.status,
-      headers: routeHeaders(),
+      headers: routeHeaders(requestId),
     });
   }
 }
@@ -237,9 +293,10 @@ export function DELETE(request: NextRequest): NextResponse<MoonCardApiResponse> 
 }
 
 export function OPTIONS(): NextResponse<null> {
+  const requestId = globalThis.crypto?.randomUUID?.() ?? "mooncard-options";
   return new NextResponse(null, {
     status: 204,
-    headers: routeHeaders({
+    headers: routeHeaders(requestId, {
       Allow: ALLOW_HEADER_VALUE,
     }),
   });

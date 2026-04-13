@@ -18,8 +18,10 @@ function toStoredLocation(location: CachedLocation): StoredLocation {
 
 export default function LocationOnboarding({
   onSelect,
+  onUseCurrentLocation,
 }: {
   onSelect: (location: StoredLocation) => void;
+  onUseCurrentLocation?: () => void;
 }) {
   const { current, isLocating } = useLocation();
 
@@ -62,6 +64,10 @@ export default function LocationOnboarding({
               type="button"
               disabled={!current}
               onClick={() => {
+                if (onUseCurrentLocation) {
+                  onUseCurrentLocation();
+                  return;
+                }
                 if (!current) return;
                 onSelect(toStoredLocation(current));
               }}

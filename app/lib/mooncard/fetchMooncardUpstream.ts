@@ -4,6 +4,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   fetchWithTimeout,
 } from "../apiUtils";
+import { isAbortLikeError, REQUEST_ID_HEADER } from "../serverObservability";
 import type { MoonCardNormalizedRequest } from "./normalizeRequest";
 
 function getPyRootUrl(): string | null {
@@ -29,7 +30,12 @@ const MoonCardPythonPayloadSchema = z
   .strict();
 
 export type FetchMoonCardUpstreamResult =
-  | { ok: true; data: unknown }
+  | {
+      ok: true;
+      data: unknown;
+      duration_ms: number;
+      upstream_request_id: string | null;
+    }
   | {
       ok: false;
       kind:
@@ -41,10 +47,15 @@ export type FetchMoonCardUpstreamResult =
       message: string;
       upstream_status: number | null;
       details: Record<string, unknown> | null;
+      duration_ms: number | null;
+      upstream_request_id: string | null;
     };
 
 export async function fetchMoonCardUpstream(
   normalizedRequest: MoonCardNormalizedRequest,
+  options?: {
+    requestId?: string | null;
+  },
 ): Promise<FetchMoonCardUpstreamResult> {
   const parsedPayload = MoonCardPythonPayloadSchema.safeParse(
     normalizedRequest.pythonPayload,
@@ -57,6 +68,8 @@ export async function fetchMoonCardUpstream(
       message: "Normalized MoonCard request payload failed internal validation.",
       upstream_status: null,
       details: parsedPayload.error.flatten(),
+      duration_ms: null,
+      upstream_request_id: null,
     };
   }
 
@@ -68,6 +81,8 @@ export async function fetchMoonCardUpstream(
       message: "PY_MOON_API is not configured for the MoonCard route.",
       upstream_status: null,
       details: null,
+      duration_ms: null,
+      upstream_request_id: null,
     };
   }
 
@@ -76,6 +91,7 @@ export async function fetchMoonCardUpstream(
   // and Python. Future cache layers can key off this exact shape without
   // teaching React components anything about Python transport details.
   const url = new URL(`${rootUrl}/mooncard`);
+  const startedAt = Date.now();
 
   try {
     const response = await fetchWithTimeout(
@@ -86,6 +102,11 @@ export async function fetchMoonCardUpstream(
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
+          ...(options?.requestId
+            ? {
+                [REQUEST_ID_HEADER]: options.requestId,
+              }
+            : {}),
         },
         body: JSON.stringify(payload),
       },
@@ -93,6 +114,8 @@ export async function fetchMoonCardUpstream(
     );
 
     const rawBody = await response.text();
+    const durationMs = Date.now() - startedAt;
+    const upstreamRequestId = response.headers.get(REQUEST_ID_HEADER);
 
     if (!response.ok) {
       const parsedErrorBody = (() => {
@@ -115,6 +138,8 @@ export async function fetchMoonCardUpstream(
             : "The Python microservice returned a non-success response.",
         upstream_status: response.status,
         details: parsedErrorBody,
+        duration_ms: durationMs,
+        upstream_request_id: upstreamRequestId,
       };
     }
 
@@ -132,28 +157,31 @@ export async function fetchMoonCardUpstream(
           body: rawBody.slice(0, 500),
           error: message,
         },
+        duration_ms: durationMs,
+        upstream_request_id: upstreamRequestId,
       };
     }
 
     return {
       ok: true,
       data: parsedJson,
+      duration_ms: durationMs,
+      upstream_request_id: upstreamRequestId,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    const name = error instanceof Error ? error.name : "";
+    const durationMs = Date.now() - startedAt;
 
     return {
       ok: false,
-      kind:
-        name.includes("AbortError") || message.toLowerCase().includes("abort")
-          ? "timeout"
-          : "bad_response",
+      kind: isAbortLikeError(error) ? "timeout" : "bad_response",
       message,
       upstream_status: null,
       details: {
         error: message,
       },
+      duration_ms: durationMs,
+      upstream_request_id: null,
     };
   }
 }

@@ -8,8 +8,11 @@ validated normalized request model, reuses the existing astronomy summary
 calculations, and returns the canonical MoonCard response model.
 """
 
+from time import perf_counter
+
 from app.python_service.astronomy import astronomy_summary
 from app.python_service.models import MoonCardNormalizedRequestModel
+from app.python_service.observability import log_event
 from app.python_service.mooncard_contract import (
     MOONCARD_CALCULATION_SOURCE,
     MOONCARD_DATA_VERSION,
@@ -93,6 +96,7 @@ def _build_visibility_data(current_phase: str | None) -> MoonCardVisibilityDataM
 
 def build_mooncard_response(
     request: MoonCardNormalizedRequestModel,
+    request_id: str | None = None,
 ) -> MoonCardResponseModel:
     """
     Build the canonical MoonCard response from a validated normalized request.
@@ -102,13 +106,27 @@ def build_mooncard_response(
     astronomy logic in the route layer.
     """
 
-    summary = astronomy_summary(
-        lat_deg=request.lat,
-        lon_deg=request.lon,
-        tz_name=request.timezone,
-        datetime_iso=request.timestamp_iso,
-        date_iso=request.local_date,
-    )
+    started_at = perf_counter()
+    try:
+        summary = astronomy_summary(
+            lat_deg=request.lat,
+            lon_deg=request.lon,
+            tz_name=request.timezone,
+            datetime_iso=request.timestamp_iso,
+            date_iso=request.local_date,
+            request_id=request_id,
+        )
+    except Exception:
+        log_event(
+            "error",
+            "mooncard_response_failed",
+            request_id=request_id,
+            timezone=request.timezone,
+            local_date=request.local_date,
+            lat=request.lat,
+            lon=request.lon,
+        )
+        raise
 
     twilight_segments = [
         MoonCardTwilightSegmentModel(
@@ -119,7 +137,7 @@ def build_mooncard_response(
         for segment in summary["twilight"]["segments"]
     ]
 
-    return MoonCardResponseModel(
+    response = MoonCardResponseModel(
         meta=MoonCardResponseMetaModel(
             location=MoonCardLocationModel(
                 lat=request.lat,
@@ -194,3 +212,20 @@ def build_mooncard_response(
         ),
         errors=[],
     )
+    log_event(
+        "info",
+        "mooncard_response_complete",
+        request_id=request_id,
+        timezone=request.timezone,
+        local_date=request.local_date,
+        duration_ms=round((perf_counter() - started_at) * 1000, 2),
+        summary_duration_ms=summary.get("meta", {})
+        .get("performance", {})
+        .get("timings_ms", {})
+        .get("total_ms"),
+        include_sun=request.include_sun,
+        include_moon=request.include_moon,
+        include_twilight=request.include_twilight,
+        include_visibility=request.include_visibility,
+    )
+    return response

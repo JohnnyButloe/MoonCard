@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.python_service.models import (
     MoonCardNormalizedRequestModel,
@@ -14,6 +14,7 @@ router = APIRouter()
 
 @router.post("/mooncard", response_model=MoonCardNormalizedResponseModel)
 def api_mooncard(
+    http_request: Request,
     request: MoonCardNormalizedRequestModel,
 ) -> MoonCardNormalizedResponseModel:
     """
@@ -23,5 +24,7 @@ def api_mooncard(
     executes. The route then delegates orchestration to the service layer and
     returns the canonical MoonCard response shape.
     """
-
-    return build_mooncard_response(request)
+    return build_mooncard_response(
+        request,
+        request_id=getattr(http_request.state, "request_id", None),
+    )
