@@ -116,6 +116,18 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
     );
   }
 
+  if (!phaseWindowQ.data) {
+    return (
+      <section ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+        <DashboardPanelState
+          title="Phase window unavailable"
+          body="The calendar is still waiting for phase data."
+          minHeightClass="min-h-[19rem]"
+        />
+      </section>
+    );
+  }
+
   const { days, meta } = phaseWindowQ.data;
   const hasPhaseEntries = days.some((day) => day.phases.length > 0);
   const phaseWindowStatus =

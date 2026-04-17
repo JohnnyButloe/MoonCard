@@ -1,174 +1,18 @@
 "use client";
 
 import { useMoonCard } from "../hooks/useAstronomy";
-import { useWeatherNow } from "../hooks/useWeather";
-import type { WeatherCondition } from "../providers/weather";
 import {
   DashboardPanelState,
   DashboardSkeletonBlock,
   DashboardStatusBanner,
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
-
-function formatLocalTime(iso: string | undefined, tz: string): string {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-    timeZoneName: "short",
-  }).format(d);
-}
-
-function formatLocalDateTime(iso: string | undefined, tz: string): string {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-    timeZoneName: "short",
-  }).format(d);
-}
-
-function formatTimeOrDateTime(iso: string | undefined, tz: string): string {
-  if (!iso) return "—";
-  const eventDate = new Date(iso);
-  if (!Number.isFinite(eventDate.getTime())) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-  }).format(eventDate);
-}
-
-function formatPercent(value: number | null): string {
-  return typeof value === "number" ? `${Math.round(value)}%` : "—";
-}
-
-function formatDegrees(value: number | null): string {
-  return typeof value === "number" ? `${value.toFixed(0)}°` : "—";
-}
-
-function toCompass(azDeg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  const normalized = ((azDeg % 360) + 360) % 360;
-  return dirs[Math.round(normalized / 45) % dirs.length];
-}
-
-function formatAzimuthWithDirection(azDeg: number | null): string {
-  if (typeof azDeg !== "number") return "—";
-
-  const normalized = Math.round(((azDeg % 360) + 360) % 360);
-  return `${toCompass(normalized)} (${normalized}°)`;
-}
-
-function weatherLabel(condition: WeatherCondition | undefined): string {
-  switch (condition) {
-    case "clear":
-      return "Clear";
-    case "partly_cloudy":
-      return "Partly cloudy";
-    case "overcast":
-      return "Overcast";
-    case "rain":
-      return "Rain";
-    case "snow":
-      return "Snow";
-    case "storm":
-      return "Storm";
-    case "fog":
-      return "Fog";
-    default:
-      return "Weather";
-  }
-}
-
-function WeatherCloudSymbol({
-  condition,
-  size = 28,
-}: {
-  condition: WeatherCondition | undefined;
-  size?: number;
-}) {
-  const stroke = "rgba(226,232,240,0.92)";
-  const baseCloud = (
-    <path
-      d="M17 41h30a8.5 8.5 0 0 0 0-17 13.5 13.5 0 0 0-25.8-3.9A9.5 9.5 0 0 0 17 41Z"
-      fill="rgba(148,163,184,0.2)"
-      stroke={stroke}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  );
-
-  return (
-    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
-      {condition === "clear" || condition === "partly_cloudy" ? (
-        <circle
-          cx="46"
-          cy="18"
-          r="7"
-          fill="rgba(250,204,21,0.25)"
-          stroke="rgba(250,204,21,0.95)"
-          strokeWidth="1.8"
-        />
-      ) : null}
-
-      {condition === "overcast" ? (
-        <path
-          d="M12 36h24a7 7 0 0 0 0-14 11 11 0 0 0-20.7-3.4A8 8 0 0 0 12 36Z"
-          fill="rgba(148,163,184,0.18)"
-          stroke={stroke}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {baseCloud}
-
-      {condition === "rain" ? (
-        <g stroke="rgba(125,211,252,0.95)" strokeWidth="2.3" strokeLinecap="round">
-          <line x1="23" y1="46" x2="20" y2="54" />
-          <line x1="33" y1="47" x2="30" y2="56" />
-          <line x1="43" y1="46" x2="40" y2="54" />
-        </g>
-      ) : null}
-
-      {condition === "snow" ? (
-        <g fill="rgba(224,242,254,0.95)">
-          <circle cx="23" cy="52" r="2" />
-          <circle cx="33" cy="54" r="2" />
-          <circle cx="43" cy="52" r="2" />
-        </g>
-      ) : null}
-
-      {condition === "storm" ? (
-        <path
-          d="M33 45l-6 10h6l-4 8 12-13h-6l5-5z"
-          fill="rgba(250,204,21,0.95)"
-        />
-      ) : null}
-
-      {condition === "fog" ? (
-        <g stroke={stroke} strokeWidth="2" strokeLinecap="round" opacity="0.9">
-          <line x1="19" y1="48" x2="47" y2="48" />
-          <line x1="16" y1="54" x2="44" y2="54" />
-        </g>
-      ) : null}
-    </svg>
-  );
-}
+import {
+  formatAzimuthWithDirection,
+  formatDegrees,
+  formatLocalTime,
+  formatPercent,
+} from "./moonDashboardShared";
 
 export default function MoonNowCard({
   lat,
@@ -182,7 +26,6 @@ export default function MoonNowCard({
   label?: string | null;
 }) {
   const summaryQ = useMoonCard(lat, lon, tz, { label });
-  const weatherQ = useWeatherNow(lat, lon);
 
   if (summaryQ.error && !summaryQ.data) {
     return (
@@ -234,8 +77,6 @@ export default function MoonNowCard({
 
   const summary = summaryQ.data;
   const moon = summary.moon;
-  const weatherCondition = weatherQ.data?.condition;
-  const weatherCloudCover = weatherQ.data?.cloudCoverPct;
   const missingPrimaryFieldCount = [
     moon.phase_name,
     moon.illumination_percent,
@@ -255,112 +96,57 @@ export default function MoonNowCard({
             tone: "warning" as const,
             message: "Astronomy data is degraded. Some details may be limited.",
           }
-        : hasPartialMoonSummary
-          ? {
-              tone: "neutral" as const,
-              message: "Some lunar details are unavailable right now.",
-            }
-          : null;
-  const weatherStatus =
-    weatherQ.error && weatherQ.data
-      ? {
-          tone: "neutral" as const,
-          message: "Weather refresh failed. Showing the last conditions.",
-        }
-      : weatherQ.error
-        ? {
-            tone: "neutral" as const,
-            message: "Weather is unavailable. Lunar data is still live.",
-          }
-        : null;
-  const weatherTitle = weatherCondition
-    ? `${weatherLabel(weatherCondition)}${
-        typeof weatherCloudCover === "number"
-          ? ` · ${Math.round(weatherCloudCover)}% cloud cover`
-          : ""
-      }`
-    : weatherQ.error
-      ? "Weather unavailable"
-      : "Loading weather";
-  const weatherBadgeLabel = weatherCondition
-    ? weatherLabel(weatherCondition)
-    : weatherQ.error && weatherQ.data
-      ? "Last weather"
-      : weatherQ.error
-        ? "Unavailable"
-        : weatherQ.isLoading
-          ? "Loading"
-          : "Weather";
-  const weatherBadgeDetail =
-    typeof weatherCloudCover === "number" && weatherCondition
-      ? `${Math.round(weatherCloudCover)}% cloud`
-      : weatherQ.error && weatherQ.data
-        ? "Cached"
-        : weatherQ.error
-          ? "Offline"
-          : weatherQ.isLoading
-            ? "Syncing"
-            : "Live";
-
+          : hasPartialMoonSummary
+            ? {
+                tone: "neutral" as const,
+                message: "Some lunar details are unavailable right now.",
+              }
+            : null;
   const lastUpdatedLabel =
     summaryQ.dataUpdatedAt > 0
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
       : "—";
-
-  const eventItems = [
-    {
-      label: "Moonrise (East)",
-      value: formatTimeOrDateTime(moon.moonrise ?? undefined, tz),
-    },
-    {
-      label: "High moon",
-      value: formatTimeOrDateTime(moon.high_moon ?? undefined, tz),
-    },
-    {
-      label: "Moonset (West)",
-      value: formatTimeOrDateTime(moon.moonset ?? undefined, tz),
-    },
-    {
-      label: "Low moon",
-      value: formatTimeOrDateTime(moon.low_moon ?? undefined, tz),
-    },
-  ];
+  const horizonState =
+    moon.is_up === true
+      ? {
+          label: "Above horizon",
+          className:
+            "border-emerald-300/22 bg-emerald-300/10 text-emerald-100/90",
+          detail: "Currently visible over the horizon.",
+        }
+      : moon.is_up === false
+        ? {
+            label: "Below horizon",
+            className: "border-white/10 bg-white/[0.04] text-slate-200/82",
+            detail: "Currently below the horizon.",
+          }
+        : {
+            label: "Position pending",
+            className: "border-white/10 bg-white/[0.04] text-slate-200/82",
+            detail: "Horizon state is temporarily unavailable.",
+          };
+  const visibilitySummary =
+    summary.visibility.summary ??
+    (moon.is_up
+      ? "Use the altitude timeline below to see how the Moon tracks through the day."
+      : "Check the timeline below for the next part of the Moon's visible arc.");
 
   return (
-    <div className="flex h-full min-h-[21rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+    <div className="flex h-full min-h-[23rem] w-full flex-col gap-4 rounded-[1.75rem] bg-slate-950/75 p-5 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap">
         <div className="min-w-0 space-y-0.5">
           <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
             Current snapshot
           </p>
-          <h2 className="text-sm font-semibold tracking-tight text-slate-50">
+          <h2 className="text-base font-semibold tracking-tight text-slate-50 sm:text-[1.05rem]">
             Moon now
           </h2>
-          <p className="text-[11px] text-slate-300/72">
-            {formatLocalDateTime(summary.meta.timestamp_iso, tz)}
-          </p>
         </div>
-
-        <div
-          className={`flex min-w-0 shrink-0 items-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] px-2.5 py-1.5 ${
-            weatherQ.isFetching ? "opacity-80" : "opacity-100"
-          }`}
-          aria-label={weatherTitle}
-          title={weatherTitle}
+        <span
+          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] ${horizonState.className}`}
         >
-          <WeatherCloudSymbol condition={weatherCondition} size={22} />
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-300/65">
-              Weather
-            </div>
-            <div className="text-[11px] font-medium leading-tight text-slate-100">
-              {weatherBadgeLabel}
-            </div>
-            <div className="text-[10px] text-slate-400/72">
-              {weatherBadgeDetail}
-            </div>
-          </div>
-        </div>
+          {horizonState.label}
+        </span>
       </header>
 
       {astronomyStatus ? (
@@ -369,87 +155,105 @@ export default function MoonNowCard({
         </DashboardStatusBanner>
       ) : null}
 
-      {weatherStatus ? (
-        <DashboardStatusBanner tone={weatherStatus.tone}>
-          {weatherStatus.message}
-        </DashboardStatusBanner>
-      ) : null}
+      <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(15rem,0.8fr)]">
+        <section className="flex min-h-0 flex-col justify-between rounded-[1.4rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_42%,_rgba(2,6,23,0.92)_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60 shadow-[0_12px_32px_rgba(2,6,23,0.38)]">
+              <MoonPhaseCircle
+                illuminationFrac={moon.illumination_fraction ?? undefined}
+                phaseAngleDeg={moon.phase_angle_deg ?? undefined}
+                size={68}
+              />
+            </div>
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Illumination
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/62">
+                Current phase
+              </div>
+              <div className="mt-1 text-[1.5rem] font-semibold leading-tight text-slate-50 sm:text-[1.85rem]">
+                {moon.phase_name ?? "—"}
+              </div>
+              <div className="mt-2 text-sm text-slate-200/82">
+                <span className="text-[1.15rem] font-semibold text-white">
+                  {formatPercent(moon.illumination_percent)}
+                </span>{" "}
+                illuminated
+              </div>
+            </div>
           </div>
-          <div className="mt-1 text-2xl font-semibold leading-none text-slate-50">
-            {formatPercent(moon.illumination_percent)}
-          </div>
-        </div>
 
-        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
-          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
+                Visibility now
+              </div>
+              <div className="mt-1 text-sm font-semibold text-slate-50">
+                {horizonState.label}
+              </div>
+              <div className="mt-1 text-[11px] leading-relaxed text-slate-300/72">
+                {horizonState.detail}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
+                Viewing note
+              </div>
+              <div className="mt-1 text-[11px] leading-relaxed text-slate-200/78">
+                {visibilitySummary}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
             <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Altitude
+              Illumination
             </div>
-            <div className="mt-1 text-[1.05rem] font-semibold leading-tight text-slate-50">
-              {formatDegrees(moon.altitude_deg)}
-            </div>
-            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
-              Altitude relative to the horizon (0° = on the horizon, positive =
-              above, negative = below).
+            <div className="mt-1 text-[1.7rem] font-semibold leading-none text-slate-50">
+              {formatPercent(moon.illumination_percent)}
             </div>
           </div>
-        </div>
 
-        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 md:col-span-1">
-          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Azimuth
-            </div>
-            <div className="mt-1 text-[0.96rem] font-semibold leading-snug text-slate-50">
-              {formatAzimuthWithDirection(moon.azimuth_deg)}
-            </div>
-            <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100 md:left-0 md:right-auto">
-              Azimuth is the Moon’s compass direction along the horizon,
-              measured in degrees from true north (0°), moving eastward (90°),
-              south (180°), and west (270°).
+          <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
+            <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+                Altitude
+              </div>
+              <div className="mt-1 text-[1.4rem] font-semibold leading-tight text-slate-50">
+                {formatDegrees(moon.altitude_deg)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-300/68">
+                Relative to your horizon
+              </div>
+              <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
+                Altitude relative to the horizon (0° = on the horizon, positive =
+                above, negative = below).
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2.5">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Current phase
-          </div>
-          <div className="mt-1 text-[1.02rem] font-semibold leading-tight text-slate-50">
-            {moon.phase_name ?? "—"}
-          </div>
-        </div>
-        <div className="shrink-0 rounded-full border border-white/10 bg-slate-950/55 p-1.5">
-          <MoonPhaseCircle
-            illuminationFrac={moon.illumination_fraction ?? undefined}
-            phaseAngleDeg={moon.phase_angle_deg ?? undefined}
-            size={44}
-          />
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-        {eventItems.map((event) => (
-          <div
-            key={event.label}
-            className="min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5"
-          >
-            <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-              {event.label}
-            </div>
-            <div className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">
-              {event.value}
+          <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
+            <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+                Azimuth
+              </div>
+              <div className="mt-1 text-base font-semibold leading-snug text-slate-50">
+                {formatAzimuthWithDirection(moon.azimuth_deg)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-300/68">
+                Compass direction on the horizon
+              </div>
+              <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
+                Azimuth is the Moon&apos;s compass direction along the horizon,
+                measured in degrees from true north (0°), moving eastward (90°),
+                south (180°), and west (270°).
+              </div>
             </div>
           </div>
-        ))}
-      </section>
+        </section>
+      </div>
 
       <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
         <div>Source: {summary.meta.calculation_source}</div>

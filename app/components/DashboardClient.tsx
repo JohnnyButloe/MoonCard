@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MoonNowCard from "./MoonCardNow";
+import MoonContextCard from "./MoonContextCard";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
 import MoonPhaseCalendar from "./MoonPhaseCalendar";
+import MoonSupportingDetails from "./MoonSupportingDetails";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
 import { DashboardPanelState } from "./DashboardState";
@@ -15,6 +17,35 @@ import {
   type StoredLocation,
   type CachedLocation,
 } from "../providers/LocationProvider";
+
+function DashboardSectionHeader({
+  id,
+  eyebrow,
+  title,
+  description,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
+          {eyebrow}
+        </p>
+        <h2
+          id={id}
+          className="mt-1 text-[1.15rem] font-semibold tracking-tight text-slate-50"
+        >
+          {title}
+        </h2>
+      </div>
+      <p className="max-w-xl text-sm text-slate-300/72">{description}</p>
+    </div>
+  );
+}
 
 function DashboardContent({
   initialView,
@@ -146,7 +177,7 @@ function DashboardContent({
         </div>
       ) : null}
 
-      <div className="relative mx-auto max-w-[1180px] px-4 py-4 sm:px-5 sm:py-5 xl:px-6 xl:py-6">
+      <div className="relative mx-auto max-w-[1240px] px-4 py-4 sm:px-5 sm:py-5 xl:px-6 xl:py-6">
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div
             className="absolute inset-0"
@@ -160,14 +191,18 @@ function DashboardContent({
           <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
         </div>
 
-        <header className="mb-3.5 flex flex-wrap items-start justify-between gap-3 sm:mb-4">
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:mb-6">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/56">
               Lunar dashboard
             </p>
-            <h1 className="mt-1 text-[1.7rem] font-semibold tracking-tight text-slate-50 sm:text-[1.9rem]">
+            <h1 className="mt-1 text-[1.55rem] font-semibold tracking-tight text-slate-50 sm:text-[1.75rem]">
               Mooncard
             </h1>
+            <p className="mt-1 max-w-xl text-sm text-slate-300/72">
+              Real-time lunar conditions centered on what matters first: the Moon
+              right now, today&apos;s sky timeline, then supporting detail.
+            </p>
           </div>
           {hasActiveLocation ? (
             <LocationTag
@@ -189,32 +224,82 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <>
-            <div className="grid gap-3.5 xl:grid-cols-12 xl:gap-4">
-              <section className="flex min-w-0 xl:col-span-7">
-                <MoonNowCard
+          <div className="space-y-6">
+            <section aria-labelledby="current-moon-heading">
+              <DashboardSectionHeader
+                id="current-moon-heading"
+                eyebrow="Section 1"
+                title="Current Moon"
+                description="Keep the live lunar state dominant, with observer context nearby but secondary."
+              />
+
+              <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
+                <section className="flex min-w-0 lg:col-span-8">
+                  <MoonNowCard
+                    lat={active.latitude}
+                    lon={active.longitude}
+                    tz={tz}
+                    label={active.label}
+                  />
+                </section>
+
+                <section className="flex min-w-0 lg:col-span-4">
+                  <MoonContextCard
+                    lat={active.latitude}
+                    lon={active.longitude}
+                    tz={tz}
+                    label={active.label}
+                    source={active.source}
+                    onEditLocation={() => setIsLocationEditorOpen(true)}
+                  />
+                </section>
+              </div>
+            </section>
+
+            <section aria-labelledby="sky-timeline-heading">
+              <DashboardSectionHeader
+                id="sky-timeline-heading"
+                eyebrow="Section 2"
+                title="Today's Sky Timeline"
+                description="The full-width altitude chart sits directly under the current Moon so the daily arc is visible without competing with the hero."
+              />
+
+              <div className="min-w-0">
+                <MoonAltitudeGraph
                   lat={active.latitude}
                   lon={active.longitude}
                   tz={tz}
                   label={active.label}
                 />
-              </section>
-              <section className="flex min-w-0 xl:col-span-5">
-                <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-                  <MoonPhaseCalendar key={tz} tz={tz} />
-                </div>
-              </section>
-            </div>
-
-            <section className="mt-3.5">
-              <MoonAltitudeGraph
-                lat={active.latitude}
-                lon={active.longitude}
-                tz={tz}
-                label={active.label}
-              />
+              </div>
             </section>
-          </>
+
+            <section aria-labelledby="supporting-context-heading">
+              <DashboardSectionHeader
+                id="supporting-context-heading"
+                eyebrow="Section 3"
+                title="Supporting Context"
+                description="Secondary planning details live below the chart, including rise/set timing and the upcoming phase window."
+              />
+
+              <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
+                <section className="flex min-w-0 lg:col-span-5">
+                  <MoonSupportingDetails
+                    lat={active.latitude}
+                    lon={active.longitude}
+                    tz={tz}
+                    label={active.label}
+                  />
+                </section>
+
+                <section className="flex min-w-0 lg:col-span-7">
+                  <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+                    <MoonPhaseCalendar key={tz} tz={tz} />
+                  </div>
+                </section>
+              </div>
+            </section>
+          </div>
         ) : (
           <section className="mt-1">
             <DashboardPanelState
