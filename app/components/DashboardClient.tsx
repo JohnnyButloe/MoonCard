@@ -261,7 +261,7 @@ function DashboardContent({
                 id="sky-timeline-heading"
                 eyebrow="Section 2"
                 title="Today's Sky Timeline"
-                description="The full-width altitude chart sits directly under the current Moon so the daily arc is visible without competing with the hero."
+                description="Full-width view of the Moon and Sun through today's sky."
               />
 
               <div className="min-w-0">
