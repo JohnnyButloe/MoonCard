@@ -12,7 +12,96 @@ import {
   formatDegrees,
   formatLocalTime,
   formatPercent,
+  formatTimeOrDateTime,
 } from "./moonDashboardShared";
+
+function toEventMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function getKeyEvent({
+  moon,
+  nowIso,
+  tz,
+}: {
+  moon: {
+    moonrise: string | null;
+    moonset: string | null;
+    high_moon: string | null;
+  };
+  nowIso: string;
+  tz: string;
+}) {
+  const nowMs = toEventMs(nowIso) ?? Date.now();
+  const candidates = [
+    {
+      label: "Moonrise",
+      iso: moon.moonrise,
+      detail: "Moon clears the horizon.",
+    },
+    {
+      label: "Peak altitude",
+      iso: moon.high_moon,
+      detail: "Highest point in the sky.",
+    },
+    {
+      label: "Moonset",
+      iso: moon.moonset,
+      detail: "Moon drops below the horizon.",
+    },
+  ]
+    .map((event) => ({
+      ...event,
+      ms: toEventMs(event.iso),
+    }))
+    .filter(
+      (
+        event,
+      ): event is {
+        label: string;
+        iso: string;
+        detail: string;
+        ms: number;
+      } => event.iso !== null && event.ms !== null,
+    );
+
+  const nextEvent = candidates
+    .filter((event) => event.ms >= nowMs)
+    .sort((a, b) => a.ms - b.ms)[0];
+
+  if (nextEvent) {
+    return {
+      heading: "Next key event",
+      label: nextEvent.label,
+      value: formatTimeOrDateTime(nextEvent.iso, tz),
+      detail: nextEvent.detail,
+      accentClass: "border-sky-300/18 bg-sky-400/8",
+    };
+  }
+
+  const lastEvent = [...candidates].sort((a, b) => b.ms - a.ms)[0];
+
+  if (lastEvent) {
+    return {
+      heading: "Latest key event",
+      label: lastEvent.label,
+      value: formatTimeOrDateTime(lastEvent.iso, tz),
+      detail: "No later key event is available today.",
+      accentClass: "border-white/10 bg-white/[0.04]",
+    };
+  }
+
+  return {
+    heading: "Key event",
+    label: "Unavailable",
+    value: "—",
+    detail: "Event timing is temporarily unavailable.",
+    accentClass: "border-white/10 bg-white/[0.04]",
+  };
+}
 
 export default function MoonNowCard({
   lat,
@@ -39,29 +128,22 @@ export default function MoonNowCard({
 
   if (!summaryQ.data) {
     return (
-      <div className="flex h-full w-full min-h-[21rem] flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+      <div className="flex h-full w-full min-h-[18rem] flex-col gap-3 rounded-[1.5rem] bg-slate-950/75 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
             <DashboardSkeletonBlock className="h-4 w-28" />
-            <DashboardSkeletonBlock className="h-3 w-40" />
           </div>
-          <DashboardSkeletonBlock className="h-11 w-24 rounded-xl" />
+          <DashboardSkeletonBlock className="h-7 w-24 rounded-full" />
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl" />
-          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl" />
-          <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl sm:block hidden" />
-        </div>
+        <DashboardSkeletonBlock className="h-[7.2rem] rounded-[1.25rem]" />
 
-        <DashboardSkeletonBlock className="h-[4.6rem] rounded-xl" />
-
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`moon-now-skeleton-${index}`}
-              className="h-[4.4rem] rounded-xl"
+              className="h-[4.8rem] rounded-xl"
             />
           ))}
         </div>
@@ -106,34 +188,40 @@ export default function MoonNowCard({
     summaryQ.dataUpdatedAt > 0
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
       : "—";
-  const horizonState =
+  const visibilityState =
     moon.is_up === true
       ? {
+          badge: "Visible now",
           label: "Above horizon",
-          className:
-            "border-emerald-300/22 bg-emerald-300/10 text-emerald-100/90",
           detail: "Currently visible over the horizon.",
+          badgeClass:
+            "border-emerald-300/22 bg-emerald-300/10 text-emerald-100/90",
+          dotClass: "bg-emerald-200",
         }
       : moon.is_up === false
         ? {
+            badge: "Below horizon",
             label: "Below horizon",
-            className: "border-white/10 bg-white/[0.04] text-slate-200/82",
             detail: "Currently below the horizon.",
+            badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+            dotClass: "bg-slate-300/75",
           }
         : {
+            badge: "Status pending",
             label: "Position pending",
-            className: "border-white/10 bg-white/[0.04] text-slate-200/82",
             detail: "Horizon state is temporarily unavailable.",
+            badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+            dotClass: "bg-slate-300/75",
           };
-  const visibilitySummary =
-    summary.visibility.summary ??
-    (moon.is_up
-      ? "Use the altitude timeline below to see how the Moon tracks through the day."
-      : "Check the timeline below for the next part of the Moon's visible arc.");
+  const keyEvent = getKeyEvent({
+    moon,
+    nowIso: summary.meta.timestamp_iso,
+    tz,
+  });
 
   return (
-    <div className="flex h-full min-h-[23rem] w-full flex-col gap-4 rounded-[1.75rem] bg-slate-950/75 p-5 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap">
+    <div className="flex h-full min-h-[18rem] w-full flex-col gap-3 rounded-[1.6rem] bg-slate-950/80 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur sm:p-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
           <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
             Current snapshot
@@ -142,11 +230,6 @@ export default function MoonNowCard({
             Moon now
           </h2>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] ${horizonState.className}`}
-        >
-          {horizonState.label}
-        </span>
       </header>
 
       {astronomyStatus ? (
@@ -155,14 +238,14 @@ export default function MoonNowCard({
         </DashboardStatusBanner>
       ) : null}
 
-      <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(15rem,0.8fr)]">
-        <section className="flex min-h-0 flex-col justify-between rounded-[1.4rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_42%,_rgba(2,6,23,0.92)_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60 shadow-[0_12px_32px_rgba(2,6,23,0.38)]">
+      <section className="rounded-[1.35rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_40%,_rgba(2,6,23,0.92)_100%)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/65 shadow-[0_8px_24px_rgba(2,6,23,0.34)]">
               <MoonPhaseCircle
                 illuminationFrac={moon.illumination_fraction ?? undefined}
                 phaseAngleDeg={moon.phase_angle_deg ?? undefined}
-                size={68}
+                size={52}
               />
             </div>
 
@@ -170,96 +253,117 @@ export default function MoonNowCard({
               <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/62">
                 Current phase
               </div>
-              <div className="mt-1 text-[1.5rem] font-semibold leading-tight text-slate-50 sm:text-[1.85rem]">
+              <div className="mt-1 text-[1.35rem] font-semibold leading-tight text-slate-50 sm:text-[1.55rem]">
                 {moon.phase_name ?? "—"}
               </div>
-              <div className="mt-2 text-sm text-slate-200/82">
-                <span className="text-[1.15rem] font-semibold text-white">
+              <div className="mt-1.5 text-sm text-slate-200/82">
+                <span className="text-[1.05rem] font-semibold text-white">
                   {formatPercent(moon.illumination_percent)}
                 </span>{" "}
                 illuminated
               </div>
             </div>
           </div>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] ${visibilityState.badgeClass}`}
+          >
+            <span
+              aria-hidden="true"
+              className={`h-1.5 w-1.5 rounded-full ${visibilityState.dotClass}`}
+            />
+            {visibilityState.badge}
+          </span>
+        </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-                Visibility now
-              </div>
-              <div className="mt-1 text-sm font-semibold text-slate-50">
-                {horizonState.label}
-              </div>
-              <div className="mt-1 text-[11px] leading-relaxed text-slate-300/72">
-                {horizonState.detail}
-              </div>
+        <div
+          className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 ${keyEvent.accentClass}`}
+        >
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
+              {keyEvent.heading}
             </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-                Viewing note
-              </div>
-              <div className="mt-1 text-[11px] leading-relaxed text-slate-200/78">
-                {visibilitySummary}
-              </div>
+            <div className="mt-1 text-sm font-semibold text-slate-50">
+              {keyEvent.label}
             </div>
           </div>
-        </section>
+          <div className="text-right">
+            <div className="text-lg font-semibold leading-none text-slate-50">
+              {keyEvent.value}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-300/70">
+              {keyEvent.detail}
+            </div>
+          </div>
+        </div>
+      </section>
 
-        <section className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1">
-          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+            Illumination
+          </div>
+          <div className="mt-1 text-[1.35rem] font-semibold leading-none text-slate-50">
+            {formatPercent(moon.illumination_percent)}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-300/68">Moonlight</div>
+        </div>
+
+        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
             <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Illumination
+              Altitude
             </div>
-            <div className="mt-1 text-[1.7rem] font-semibold leading-none text-slate-50">
-              {formatPercent(moon.illumination_percent)}
+            <div className="mt-1 text-[1.2rem] font-semibold leading-tight text-slate-50">
+              {formatDegrees(moon.altitude_deg)}
             </div>
-          </div>
-
-          <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-            <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-                Altitude
-              </div>
-              <div className="mt-1 text-[1.4rem] font-semibold leading-tight text-slate-50">
-                {formatDegrees(moon.altitude_deg)}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-300/68">
-                Relative to your horizon
-              </div>
-              <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
-                Altitude relative to the horizon (0° = on the horizon, positive =
-                above, negative = below).
-              </div>
+            <div className="mt-1 text-[11px] text-slate-300/68">Relative to horizon</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
+              Altitude relative to the horizon (0° = on the horizon, positive =
+              above, negative = below).
             </div>
           </div>
+        </div>
 
-          <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-            <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-                Azimuth
-              </div>
-              <div className="mt-1 text-base font-semibold leading-snug text-slate-50">
-                {formatAzimuthWithDirection(moon.azimuth_deg)}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-300/68">
-                Compass direction on the horizon
-              </div>
-              <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
-                Azimuth is the Moon&apos;s compass direction along the horizon,
-                measured in degrees from true north (0°), moving eastward (90°),
-                south (180°), and west (270°).
-              </div>
+        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+              Azimuth
+            </div>
+            <div className="mt-1 text-[0.98rem] font-semibold leading-snug text-slate-50">
+              {formatAzimuthWithDirection(moon.azimuth_deg)}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-300/68">Compass bearing</div>
+            <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
+              Azimuth is the Moon&apos;s compass direction along the horizon,
+              measured in degrees from true north (0°), moving eastward (90°),
+              south (180°), and west (270°).
             </div>
           </div>
-        </section>
-      </div>
+        </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
-        <div>Source: {summary.meta.calculation_source}</div>
-        <div>
-          Updated {lastUpdatedLabel}
-          {summaryQ.isFetching ? " · updating" : ""}
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
+            Visible now
+          </div>
+          <div className="mt-1 text-sm font-semibold text-slate-50">
+            {visibilityState.label}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-300/68">
+            {visibilityState.detail}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/8 pt-2 text-[10px] text-slate-400/70">
+        <div className="text-slate-400/68">
+          {summary.visibility.summary ?? "Live lunar snapshot"}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div>Source: {summary.meta.calculation_source}</div>
+          <div>
+            Updated {lastUpdatedLabel}
+            {summaryQ.isFetching ? " · updating" : ""}
+          </div>
         </div>
       </footer>
     </div>
