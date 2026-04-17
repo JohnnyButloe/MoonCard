@@ -21,12 +21,20 @@ vi.mock("./MoonCardNow", () => ({
   default: () => <div>moon-now-panel</div>,
 }));
 
+vi.mock("./MoonContextCard", () => ({
+  default: () => <div>moon-context-panel</div>,
+}));
+
 vi.mock("./MoonGraph", () => ({
   default: () => <div>moon-graph-panel</div>,
 }));
 
 vi.mock("./MoonPhaseCalendar", () => ({
   default: () => <div>moon-phase-calendar</div>,
+}));
+
+vi.mock("./MoonSupportingDetails", () => ({
+  default: () => <div>moon-supporting-panel</div>,
 }));
 
 vi.mock("./LocationTag", () => ({
@@ -72,8 +80,13 @@ describe("DashboardClient", () => {
     render(<DashboardClient fallback={fallbackLocation} />);
 
     expect(screen.getByText("Mooncard")).toBeInTheDocument();
+    expect(screen.getByText("Current Moon")).toBeInTheDocument();
+    expect(screen.getByText("Today's Sky Timeline")).toBeInTheDocument();
+    expect(screen.getByText("Supporting Context")).toBeInTheDocument();
     expect(screen.getByText("moon-now-panel")).toBeInTheDocument();
+    expect(screen.getByText("moon-context-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-phase-calendar")).toBeInTheDocument();
+    expect(screen.getByText("moon-supporting-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-graph-panel")).toBeInTheDocument();
     expect(screen.getByText("location-tag")).toBeInTheDocument();
   });

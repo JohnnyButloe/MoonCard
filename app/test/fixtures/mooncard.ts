@@ -69,8 +69,8 @@ export function buildMoonCardRequest(
         label: "Testville",
       },
       datetime: {
-        date: "2026-04-05",
-        time: "06:30",
+        date: "2026-04-05" as MoonCardRequest["datetime"]["date"],
+        time: "06:30" as MoonCardRequest["datetime"]["time"],
         timezone: "UTC",
       },
       options: {

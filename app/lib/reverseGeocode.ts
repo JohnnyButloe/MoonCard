@@ -96,7 +96,6 @@ export async function reverseGeocode(
       label,
       city: raw.city ?? raw.locality,
       region: raw.principalSubdivision,
-      country: raw.countryName,
       country,
       raw,
     };

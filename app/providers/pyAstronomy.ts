@@ -5,6 +5,20 @@ export interface AstronomySummary {
     source: string;
     generated_at_utc: string;
     cache_key: string;
+    performance?: {
+      timings_ms?: Record<string, number>;
+      cache_keys?: Record<string, string>;
+      cache?: Record<
+        string,
+        {
+          status?: string;
+          hits?: number;
+          misses?: number;
+          size?: number;
+          max_size?: number;
+        }
+      >;
+    };
     location: {
       latitude: number;
       longitude: number;
