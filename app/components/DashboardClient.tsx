@@ -6,7 +6,7 @@ import MoonNowCard from "./MoonCardNow";
 import MoonContextCard from "./MoonContextCard";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
-import MoonPhaseCalendar from "./MoonPhaseCalendar";
+import MoonCalendarPreview from "./MoonCalendarPreview";
 import MoonSupportingDetails from "./MoonSupportingDetails";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
@@ -270,7 +270,7 @@ function DashboardContent({
               />
 
               <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
-                <section className="flex min-w-0 lg:col-span-5">
+                <section className="flex min-w-0 lg:col-span-7">
                   <MoonSupportingDetails
                     lat={active.latitude}
                     lon={active.longitude}
@@ -278,10 +278,8 @@ function DashboardContent({
                     label={active.label}
                   />
                 </section>
-                <section className="flex min-w-0 lg:col-span-7">
-                  <div className="flex h-full w-full min-w-0 flex-col rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-                    <MoonPhaseCalendar key={tz} tz={tz} />
-                  </div>
+                <section className="flex min-w-0 lg:col-span-5">
+                  <MoonCalendarPreview key={tz} tz={tz} />
                 </section>
               </div>
             </section>

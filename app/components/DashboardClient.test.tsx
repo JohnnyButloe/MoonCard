@@ -29,8 +29,8 @@ vi.mock("./MoonGraph", () => ({
   default: () => <div>moon-graph-panel</div>,
 }));
 
-vi.mock("./MoonPhaseCalendar", () => ({
-  default: () => <div>moon-phase-calendar</div>,
+vi.mock("./MoonCalendarPreview", () => ({
+  default: () => <div>moon-calendar-preview-panel</div>,
 }));
 
 vi.mock("./MoonSupportingDetails", () => ({
@@ -85,8 +85,8 @@ describe("DashboardClient", () => {
     expect(screen.getByText("Supporting Context")).toBeInTheDocument();
     expect(screen.getByText("moon-now-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-context-panel")).toBeInTheDocument();
-    expect(screen.getByText("moon-phase-calendar")).toBeInTheDocument();
     expect(screen.getByText("moon-supporting-panel")).toBeInTheDocument();
+    expect(screen.getByText("moon-calendar-preview-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-graph-panel")).toBeInTheDocument();
     expect(screen.getByText("location-tag")).toBeInTheDocument();
   });
