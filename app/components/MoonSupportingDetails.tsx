@@ -7,6 +7,13 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import {
+  DASHBOARD_META_FOOTER_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_EYEBROW_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SUPPORT_TEXT_CLASS,
+  DASHBOARD_SURFACE_CLASS,
   formatLocalTime,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
@@ -46,7 +53,7 @@ export default function MoonSupportingDetails({
 
   if (!summaryQ.data) {
     return (
-      <div className="flex h-full min-h-[19rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[19rem]`}>
         <div className="space-y-2">
           <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
           <DashboardSkeletonBlock className="h-4 w-40" />
@@ -120,14 +127,10 @@ export default function MoonSupportingDetails({
         : "Viewing unknown";
 
   return (
-    <div className="flex h-full min-h-[19rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
+    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[19rem]`}>
       <header className="min-w-0">
-        <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
-          Supporting context
-        </p>
-        <h2 className="mt-1 text-sm font-semibold tracking-tight text-slate-50">
-          Rise/set details
-        </h2>
+        <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Supporting context</p>
+        <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Rise/set details</h2>
       </header>
 
       {status ? (
@@ -140,11 +143,9 @@ export default function MoonSupportingDetails({
         {events.map((event) => (
           <div
             key={event.label}
-            className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5"
+            className={`${DASHBOARD_SURFACE_CLASS} min-h-[5.4rem] px-3 py-2.5`}
           >
-            <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-              {event.label}
-            </div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>{event.label}</div>
             <div className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">
               {event.value}
             </div>
@@ -153,32 +154,26 @@ export default function MoonSupportingDetails({
       </section>
 
       <section className="grid gap-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-            Viewing conditions
-          </div>
+        <div className={DASHBOARD_SURFACE_CLASS}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
           <div className="mt-1 text-sm font-semibold text-slate-50">
             {viewingLabel}
           </div>
-          <div className="mt-1 text-[11px] leading-relaxed text-slate-300/72">
-            {visibilitySummary}
-          </div>
+          <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
         </div>
 
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-            Twilight
-          </div>
+        <div className={DASHBOARD_SURFACE_CLASS}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight</div>
           <div className="mt-1 text-sm font-semibold text-slate-50">
             {formatTwilightLabel(summary.twilight.current_phase)}
           </div>
-          <div className="mt-1 text-[11px] leading-relaxed text-slate-300/72">
+          <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>
             Next transition {formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz)}
           </div>
         </div>
       </section>
 
-      <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
+      <footer className={DASHBOARD_META_FOOTER_CLASS}>
         <div>Source: {summary.meta.calculation_source}</div>
         <div>
           Updated {updatedLabel}

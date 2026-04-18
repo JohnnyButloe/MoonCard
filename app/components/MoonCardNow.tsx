@@ -9,6 +9,14 @@ import {
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import {
+  DASHBOARD_META_FOOTER_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_EYEBROW_CLASS,
+  DASHBOARD_PANEL_HEADER_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SUPPORT_TEXT_CLASS,
+  DASHBOARD_SURFACE_CLASS,
   formatLocalTime,
   formatTimeOrDateTime,
   weatherLabel,
@@ -149,8 +157,8 @@ export default function MoonNowCard({
 
   if (!summaryQ.data) {
     return (
-      <div className="flex h-full w-full min-h-[18rem] flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+        <div className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
             <DashboardSkeletonBlock className="h-4 w-28" />
@@ -255,15 +263,13 @@ export default function MoonNowCard({
           : "Weather live";
 
   return (
-    <div className="flex h-full min-h-[18rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/72 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+      <header className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
         <div className="min-w-0 space-y-0.5">
-          <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
+          <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>
             Current snapshot
           </p>
-          <h2 className="text-sm font-semibold tracking-tight text-slate-50">
-            Moon now
-          </h2>
+          <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Moon now</h2>
         </div>
       </header>
 
@@ -274,7 +280,7 @@ export default function MoonNowCard({
       ) : null}
 
       <section className="grid gap-2.5 lg:grid-cols-[minmax(0,1.15fr)_minmax(14rem,0.85fr)]">
-        <div className="rounded-[1.25rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_40%,_rgba(2,6,23,0.92)_100%)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="rounded-[1.1rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_40%,_rgba(2,6,23,0.92)_100%)] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
           <div className="flex items-start gap-3">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60">
               <MoonPhaseCircle
@@ -285,9 +291,7 @@ export default function MoonNowCard({
             </div>
 
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-                Current phase
-              </div>
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Current phase</div>
               <div className="mt-1 text-[1.45rem] font-semibold leading-tight text-slate-50 sm:text-[1.6rem]">
                 {moon.phase_name ?? "—"}
               </div>
@@ -303,7 +307,7 @@ export default function MoonNowCard({
                 >
                   {visibilityState.badge}
                 </span>
-                <span className="text-[11px] text-slate-300/72">
+                <span className="text-[11px] text-slate-300/70">
                   {visibilityState.detail}
                 </span>
               </div>
@@ -314,41 +318,35 @@ export default function MoonNowCard({
         <div
           className={`rounded-[1.1rem] border px-3.5 py-3 ${keyEvent.className}`}
         >
-          <div className="text-[10px] uppercase tracking-[0.18em] text-sky-100/60">
-            {keyEvent.heading}
-          </div>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>{keyEvent.heading}</div>
           <div className="mt-1 text-sm font-semibold text-slate-50">
             {keyEvent.label}
           </div>
           <div className="mt-2 text-[1.2rem] font-semibold leading-tight text-slate-50">
             {keyEvent.value}
           </div>
-          <div className="mt-1 text-[11px] text-slate-300/72">
-            {keyEvent.detail}
-          </div>
+          <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{keyEvent.detail}</div>
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Illumination
-          </div>
+        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[5.5rem] flex-col justify-between`}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Illumination</div>
           <div className="mt-1 text-[1.3rem] font-semibold leading-none text-slate-50">
             {formatPercent(moon.illumination_percent)}
           </div>
-          <div className="mt-1 text-[11px] text-slate-300/68">Moonlight</div>
+          <div className="mt-1 text-[11px] text-slate-300/66">Moonlight</div>
         </div>
 
-        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+        <div
+          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[5.5rem] px-3 py-2.5`}
+        >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Altitude
-            </div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Altitude</div>
             <div className="mt-1 text-[1.18rem] font-semibold leading-tight text-slate-50">
               {formatDegrees(moon.altitude_deg)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-300/68">
+            <div className="mt-1 text-[11px] text-slate-300/66">
               Relative to horizon
             </div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
@@ -358,17 +356,15 @@ export default function MoonNowCard({
           </div>
         </div>
 
-        <div className="relative rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+        <div
+          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[5.5rem] px-3 py-2.5`}
+        >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Azimuth
-            </div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Azimuth</div>
             <div className="mt-1 text-[0.98rem] font-semibold leading-snug text-slate-50">
               {formatAzimuthWithDirection(moon.azimuth_deg)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-300/68">
-              Compass bearing
-            </div>
+            <div className="mt-1 text-[11px] text-slate-300/66">Compass bearing</div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
               Azimuth is the Moon&apos;s compass direction along the horizon,
               measured in degrees from true north (0°), moving eastward (90°),
@@ -377,27 +373,21 @@ export default function MoonNowCard({
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Visible
-          </div>
+        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[5.5rem] flex-col justify-between`}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Visible</div>
           <div className="mt-1 text-sm font-semibold text-slate-50">
             {visibilityState.label}
           </div>
-          <div className="mt-1 text-[11px] text-slate-300/68">
-            {visibilityState.detail}
-          </div>
+          <div className="mt-1 text-[11px] text-slate-300/66">{visibilityState.detail}</div>
         </div>
       </section>
 
-      <footer className="border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
-        <div className="text-slate-400/68">{weatherSummary}</div>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <div>Source: {summary.meta.calculation_source}</div>
-          <div>
-            Updated {lastUpdatedLabel}
-            {summaryQ.isFetching ? " · updating" : ""}
-          </div>
+      <footer className={DASHBOARD_META_FOOTER_CLASS}>
+        <div>{weatherSummary}</div>
+        <div>Source: {summary.meta.calculation_source}</div>
+        <div>
+          Updated {lastUpdatedLabel}
+          {summaryQ.isFetching ? " · updating" : ""}
         </div>
       </footer>
     </div>

@@ -9,6 +9,14 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import {
+  DASHBOARD_META_FOOTER_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_EYEBROW_CLASS,
+  DASHBOARD_PANEL_HEADER_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SUPPORT_TEXT_CLASS,
+  DASHBOARD_SURFACE_CLASS,
   WeatherCloudSymbol,
   formatLocalDate,
   formatLocalTime,
@@ -73,8 +81,8 @@ export default function MoonContextCard({
 
   if (!summaryQ.data && !weatherQ.data) {
     return (
-      <div className="flex h-full min-h-[18rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+        <div className={DASHBOARD_PANEL_HEADER_CLASS}>
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-20 rounded-full" />
             <DashboardSkeletonBlock className="h-4 w-40" />
@@ -139,15 +147,11 @@ export default function MoonContextCard({
       : "—";
 
   return (
-    <div className="flex h-full min-h-[18rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-      <header className="flex items-start justify-between gap-3">
+    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+      <header className={DASHBOARD_PANEL_HEADER_CLASS}>
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
-            Context
-          </p>
-          <h2 className="mt-1 text-sm font-semibold tracking-tight text-slate-50">
-            Location & weather
-          </h2>
+          <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Context</p>
+          <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Location & weather</h2>
         </div>
         {onEditLocation ? (
           <button
@@ -172,12 +176,10 @@ export default function MoonContextCard({
         </DashboardStatusBanner>
       ) : null}
 
-      <section className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
+      <section className={DASHBOARD_SURFACE_CLASS}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Location
-            </div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Location</div>
             <div className="mt-1 truncate text-base font-semibold text-slate-50">
               {label}
             </div>
@@ -194,47 +196,41 @@ export default function MoonContextCard({
       </section>
 
       <section className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Local date
-          </div>
+        <div className={DASHBOARD_SURFACE_CLASS}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local date</div>
           <div className="mt-1 text-sm font-semibold text-slate-100">
             {formatLocalDate(timestampIso, tz)}
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-            Local time
-          </div>
+        <div className={DASHBOARD_SURFACE_CLASS}>
+          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local time</div>
           <div className="mt-1 text-sm font-semibold text-slate-100">
             {formatLocalTime(timestampIso, tz)}
           </div>
         </div>
       </section>
 
-      <section className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3">
+      <section className={DASHBOARD_SURFACE_CLASS}>
         <div className="flex items-start gap-3">
           <div className="mt-0.5 shrink-0 rounded-full border border-white/10 bg-slate-950/55 p-2">
             <WeatherCloudSymbol condition={weatherCondition} size={26} />
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">
-              Weather
-            </div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
             <div className="mt-1 text-sm font-semibold text-slate-50">
               {weatherTitle}
             </div>
-            <div className="mt-1 text-[11px] leading-relaxed text-slate-300/72">
-              {weatherDetail}
-            </div>
+            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{weatherDetail}</div>
           </div>
         </div>
       </section>
 
-      <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
+      <footer className={DASHBOARD_META_FOOTER_CLASS}>
         <div>Snapshot updated {updatedLabel}</div>
-        <div>{summaryQ.isFetching || weatherQ.isFetching ? "Syncing live data" : "Live context"}</div>
+        <div>
+          {summaryQ.isFetching || weatherQ.isFetching ? "Syncing live data" : "Live context"}
+        </div>
       </footer>
     </div>
   );

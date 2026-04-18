@@ -2,6 +2,30 @@
 
 import type { WeatherCondition } from "../providers/weather";
 
+export const DASHBOARD_PANEL_CLASS =
+  "flex h-full w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/72 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur";
+
+export const DASHBOARD_PANEL_HEADER_CLASS =
+  "flex items-start justify-between gap-3";
+
+export const DASHBOARD_PANEL_EYEBROW_CLASS =
+  "text-[10px] uppercase tracking-[0.24em] text-sky-200/50";
+
+export const DASHBOARD_PANEL_TITLE_CLASS =
+  "mt-1 text-sm font-semibold tracking-tight text-slate-50";
+
+export const DASHBOARD_SURFACE_CLASS =
+  "rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-3.5 py-3";
+
+export const DASHBOARD_METRIC_LABEL_CLASS =
+  "text-[10px] uppercase tracking-[0.18em] text-slate-300/60";
+
+export const DASHBOARD_SUPPORT_TEXT_CLASS =
+  "mt-1 text-[11px] leading-relaxed text-slate-300/70";
+
+export const DASHBOARD_META_FOOTER_CLASS =
+  "mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2.5 text-[10px] text-slate-400/68";
+
 export function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
 

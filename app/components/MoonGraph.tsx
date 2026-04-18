@@ -10,6 +10,10 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import {
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+} from "./moonDashboardShared";
 
 const VIEW_W = 160;
 const VIEW_H = 36;
@@ -369,7 +373,7 @@ export default function MoonAltitudeGraph({
 
   if (!summaryQ.data) {
     return (
-      <div className="flex min-h-[18rem] w-full flex-col gap-2.5 rounded-[1.5rem] bg-slate-950/72 p-3.5 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
         <div className="flex items-center justify-between gap-2">
           <DashboardSkeletonBlock className="h-4 w-36" />
           <DashboardSkeletonBlock className="h-5 w-24 rounded-full" />
@@ -498,10 +502,10 @@ export default function MoonAltitudeGraph({
   const starGlowId = `${idPrefix}-starGlow`;
 
   return (
-    <div className="min-h-[18rem] w-full rounded-[1.5rem] bg-slate-950/72 p-3.5 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-      <header className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold tracking-tight text-slate-50">
+          <h2 className={`${DASHBOARD_PANEL_TITLE_CLASS} mt-0`}>
             Moon/Sun altitude
           </h2>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sky-100/70">
@@ -512,14 +516,14 @@ export default function MoonAltitudeGraph({
             Twilight {twilightLabel}
           </span>
         </div>
-        <div className="whitespace-nowrap text-[10px] text-slate-300/65">
+        <div className="whitespace-nowrap text-[10px] text-slate-400/66">
           Updated {lastUpdatedLabel}
           {summaryQ.isFetching ? " · updating" : ""}
         </div>
       </header>
 
       {timelineStatus ? (
-        <DashboardStatusBanner tone={timelineStatus.tone} className="mb-2.5">
+        <DashboardStatusBanner tone={timelineStatus.tone}>
           {timelineStatus.message}
         </DashboardStatusBanner>
       ) : null}
@@ -703,7 +707,7 @@ export default function MoonAltitudeGraph({
         </div>
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/72">
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-white/8 pt-2.5 text-[10px] text-slate-200/68">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
           <MoonPhaseCircle
             illuminationFrac={summary.moon.illumination_fraction ?? undefined}

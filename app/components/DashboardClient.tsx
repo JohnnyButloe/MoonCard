@@ -28,13 +28,13 @@ function DashboardSectionHeader({
   title: string;
 }) {
   return (
-    <div className="mb-3">
-      <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
+    <div className="mb-2.5 sm:mb-3">
+      <p className="text-[10px] uppercase tracking-[0.24em] text-sky-200/48">
         {eyebrow}
       </p>
       <h2
         id={id}
-        className="mt-1 text-[1.1rem] font-semibold tracking-tight text-slate-50"
+        className="mt-1 text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
       >
         {title}
       </h2>
@@ -186,12 +186,12 @@ function DashboardContent({
           <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
         </div>
 
-        <header className="mb-4 flex flex-wrap items-start justify-between gap-3 sm:mb-5">
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-4 sm:mb-6">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/56">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-sky-200/54">
               Lunar dashboard
             </p>
-            <h1 className="mt-1 text-[1.7rem] font-semibold tracking-tight text-slate-50 sm:text-[1.9rem]">
+            <h1 className="mt-1 text-[1.65rem] font-semibold tracking-tight text-slate-50 sm:text-[1.82rem]">
               Mooncard
             </h1>
           </div>
@@ -215,7 +215,7 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             <section aria-labelledby="current-moon-heading">
               <DashboardSectionHeader
                 id="current-moon-heading"

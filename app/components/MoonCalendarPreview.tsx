@@ -11,6 +11,16 @@ import {
 } from "./DashboardState";
 import MoonPhaseCalendar from "./MoonPhaseCalendar";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import {
+  DASHBOARD_META_FOOTER_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_EYEBROW_CLASS,
+  DASHBOARD_PANEL_HEADER_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SUPPORT_TEXT_CLASS,
+  DASHBOARD_SURFACE_CLASS,
+} from "./moonDashboardShared";
 
 const WINDOW_DAYS = 35;
 
@@ -56,8 +66,8 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
 
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
-      <div className="flex h-full min-h-[16rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[16rem]`}>
+        <div className={DASHBOARD_PANEL_HEADER_CLASS}>
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-28 rounded-full" />
             <DashboardSkeletonBlock className="h-4 w-36" />
@@ -136,7 +146,7 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
             role="dialog"
             aria-modal="true"
             aria-label="Lunar calendar"
-            className="flex max-h-[88vh] w-full max-w-[72rem] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/95 p-4 shadow-2xl shadow-black/60 sm:p-5"
+            className="flex max-h-[88vh] w-full max-w-[72rem] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/95 p-5 shadow-2xl shadow-black/60"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -147,7 +157,7 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
                 <h2 className="mt-1 text-xl font-semibold text-white/92">
                   Full phase window
                 </h2>
-                <p className="mt-1 text-sm text-slate-300/72">
+                <p className={DASHBOARD_SUPPORT_TEXT_CLASS}>
                   Browse the full 35-day phase calendar when you need more detail.
                 </p>
               </div>
@@ -167,15 +177,11 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
         </div>
       ) : null}
 
-      <div className="flex h-full min-h-[16rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur">
-        <header className="flex items-start justify-between gap-3">
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[16rem]`}>
+        <header className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
-              Lunar calendar
-            </p>
-            <h2 className="mt-1 text-sm font-semibold tracking-tight text-slate-50">
-              Next major phases
-            </h2>
+            <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Lunar calendar</p>
+            <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Next major phases</h2>
           </div>
           <button
             type="button"
@@ -197,7 +203,7 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
             {upcomingPhases.map((phase) => (
               <div
                 key={`${phase.key}-${phase.instant_utc}`}
-                className="flex items-start gap-3 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3"
+                className={`${DASHBOARD_SURFACE_CLASS} flex items-start gap-3`}
               >
                 <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60">
                   <MoonPhaseCircle
@@ -210,16 +216,14 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <div className="text-sm font-semibold text-slate-50">
-                      {phase.label}
-                    </div>
+                    <div className="text-sm font-semibold text-slate-50">{phase.label}</div>
                     {phase.isToday ? (
                       <span className="rounded-full border border-sky-300/18 bg-sky-300/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-sky-100/78">
                         Today
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 text-[12px] text-slate-300/72">
+                  <div className={`mt-1 ${DASHBOARD_METRIC_LABEL_CLASS}`}>
                     {formatPhaseDate(phase.instant_local, tz)}
                   </div>
                   <div className="mt-0.5 text-[12px] font-medium text-slate-100">
@@ -230,12 +234,12 @@ export default function MoonCalendarPreview({ tz }: { tz: string }) {
             ))}
           </section>
         ) : (
-          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-sm text-slate-300/72">
+          <div className={`${DASHBOARD_SURFACE_CLASS} text-sm text-slate-300/72`}>
             No major phases are scheduled in the current preview window.
           </div>
         )}
 
-        <footer className="mt-auto border-t border-white/8 pt-2 text-[10px] text-slate-400/72">
+        <footer className={DASHBOARD_META_FOOTER_CLASS}>
           Previewing the next major phases in the 35-day calendar window.
         </footer>
       </div>
