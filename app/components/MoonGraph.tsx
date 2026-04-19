@@ -10,6 +10,10 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import {
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+} from "./moonDashboardShared";
 
 const VIEW_W = 160;
 const VIEW_H = 36;
@@ -369,30 +373,19 @@ export default function MoonAltitudeGraph({
 
   if (!summaryQ.data) {
     return (
-      <div className="flex min-h-[18rem] w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-2">
-            <DashboardSkeletonBlock className="h-2 w-28 rounded-full" />
-            <DashboardSkeletonBlock className="h-4 w-36" />
-          </div>
-          <div className="flex gap-2">
-            <DashboardSkeletonBlock className="h-6 w-20 rounded-full" />
-            <DashboardSkeletonBlock className="h-6 w-16 rounded-full" />
-          </div>
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+        <div className="flex items-center justify-between gap-2">
+          <DashboardSkeletonBlock className="h-4 w-36" />
+          <DashboardSkeletonBlock className="h-5 w-24 rounded-full" />
         </div>
 
-        <DashboardSkeletonBlock className="h-[10rem] rounded-[1rem]" />
+        <DashboardSkeletonBlock className="h-[10.75rem] rounded-[1rem]" />
 
         <div className="flex flex-wrap gap-1.5">
-          <DashboardSkeletonBlock className="h-6 w-24 rounded-full" />
-          <DashboardSkeletonBlock className="h-6 w-24 rounded-full" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-1.5 md:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
+          {Array.from({ length: 7 }).map((_, index) => (
             <DashboardSkeletonBlock
-              key={`moon-graph-skeleton-${index}`}
-              className="h-12 rounded-lg"
+              key={`moon-graph-pill-skeleton-${index}`}
+              className="h-6 w-24 rounded-full"
             />
           ))}
         </div>
@@ -509,50 +502,34 @@ export default function MoonAltitudeGraph({
   const starGlowId = `${idPrefix}-starGlow`;
 
   return (
-    <div className="min-h-[18rem] w-full rounded-[1.5rem] bg-slate-950/70 p-4 ring-1 ring-white/10 shadow-lg shadow-black/25 backdrop-blur">
-      <header className="mb-3 flex flex-wrap items-start justify-between gap-2.5 sm:flex-nowrap">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
-            Altitude timeline
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold tracking-tight text-slate-50">
-              Moon/Sun altitude
-            </h2>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sky-100/70">
-              <span
-                className="h-1.5 w-1.5 rounded-full ring-1 ring-white/20"
-                style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
-              />
-              Twilight {twilightLabel}
-            </span>
-          </div>
+    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className={`${DASHBOARD_PANEL_TITLE_CLASS} mt-0`}>
+            Moon/Sun altitude
+          </h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sky-100/70">
+            <span
+              className="h-1.5 w-1.5 rounded-full ring-1 ring-white/20"
+              style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
+            />
+            Twilight {twilightLabel}
+          </span>
         </div>
-        <div className="flex items-center gap-2 self-start">
-          <div className="whitespace-nowrap text-[10px] text-slate-300/70">
-            Updated {lastUpdatedLabel}
-            {summaryQ.isFetching ? " · updating" : ""}
-          </div>
-          <button
-            type="button"
-            disabled
-            aria-label="Expand chart view is not available yet"
-            title="Expand chart view coming soon"
-            className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400/65 disabled:cursor-default"
-          >
-            Expand
-          </button>
+        <div className="whitespace-nowrap text-[10px] text-slate-400/66">
+          Updated {lastUpdatedLabel}
+          {summaryQ.isFetching ? " · updating" : ""}
         </div>
       </header>
 
       {timelineStatus ? (
-        <DashboardStatusBanner tone={timelineStatus.tone} className="mb-3">
+        <DashboardStatusBanner tone={timelineStatus.tone}>
           {timelineStatus.message}
         </DashboardStatusBanner>
       ) : null}
 
       <div className="overflow-hidden rounded-[1rem] border border-white/10 bg-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-        <div className="aspect-[5/1.18] w-full">
+        <div className="aspect-[5/1.24] w-full">
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             preserveAspectRatio="none"
@@ -730,7 +707,24 @@ export default function MoonAltitudeGraph({
         </div>
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/72">
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-white/8 pt-2.5 text-[10px] text-slate-200/68">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
+          <MoonPhaseCircle
+            illuminationFrac={summary.moon.illumination_fraction ?? undefined}
+            phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
+            size={12}
+            className="shrink-0"
+          />
+          Moon now
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
+          <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
+          Sun now
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
+          <span className="block h-px w-4 bg-slate-300/78" />
+          Horizon
+        </span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
           <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
           Sunrise <span className="font-semibold text-slate-100">{sunriseLegendLabel}</span>
@@ -739,25 +733,22 @@ export default function MoonAltitudeGraph({
           <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
           Sunset <span className="font-semibold text-slate-100">{sunsetLegendLabel}</span>
         </span>
-      </div>
-
-      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] md:grid-cols-5">
         {TWILIGHT_LEGEND_ORDER.map((phase) => (
-          <div
+          <span
             key={phase}
-            className="rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-1.5"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1"
           >
-            <div className="flex items-center gap-1.5 uppercase tracking-[0.14em] text-sky-100/58">
-              <span
-                className="h-2 w-2 rounded-sm ring-1 ring-white/15"
-                style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
-              />
-              <span>{TWILIGHT_LABEL[phase]}</span>
-            </div>
-            <div className="mt-1 text-xs font-medium tracking-normal text-slate-100">
+            <span
+              className="h-2 w-2 rounded-sm ring-1 ring-white/15"
+              style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
+            />
+            <span className="uppercase tracking-[0.14em] text-sky-100/58">
+              {TWILIGHT_LABEL[phase]}
+            </span>
+            <span className="font-semibold tracking-normal text-slate-100">
               {nextPhaseStartLabel[phase]}
-            </div>
-          </div>
+            </span>
+          </span>
         ))}
       </div>
     </div>

@@ -55,11 +55,15 @@ describe("MoonCardNow", () => {
     render(<MoonNowCard lat={40.7} lon={-74} tz="UTC" />);
 
     expect(screen.getByText("Moon now")).toBeInTheDocument();
-    expect(screen.getByText("74%")).toBeInTheDocument();
     expect(screen.getByText("Waxing Gibbous")).toBeInTheDocument();
-    expect(screen.getByText("Clear")).toBeInTheDocument();
-    expect(screen.getByText("18% cloud")).toBeInTheDocument();
-    expect(screen.getByText("Moonrise (East)")).toBeInTheDocument();
+    expect(screen.getAllByText("74%")).toHaveLength(2);
+    expect(screen.getByText("Visible now")).toBeInTheDocument();
+    expect(screen.getByText("Peak altitude")).toBeInTheDocument();
+    expect(screen.getByText("Apr 5, 7:20 AM")).toBeInTheDocument();
+    expect(screen.getByText("32°")).toBeInTheDocument();
+    expect(screen.getByText("SE (143°)")).toBeInTheDocument();
+    expect(screen.getByText("Weather Clear · 18% cloud")).toBeInTheDocument();
+    expect(screen.getByText("Source: python_microservice")).toBeInTheDocument();
     expect(screen.getByText("Updated 6:35 AM UTC")).toBeInTheDocument();
   });
 
@@ -97,12 +101,10 @@ describe("MoonCardNow", () => {
     expect(
       screen.getByText("Astronomy data is degraded. Some details may be limited."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Weather is unavailable. Lunar data is still live."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Weather unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Peak altitude")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
-    expect(screen.getByText("Moonrise (East)")).toBeInTheDocument();
+    expect(screen.getByText("Visible now")).toBeInTheDocument();
   });
 
   it("renders the error shell when moon data is unavailable", () => {

@@ -38,7 +38,7 @@ export function DashboardStatusBanner({
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
-      className={`rounded-xl border px-2.5 py-2 text-[11px] leading-snug ${TONE_CLASSES[tone]} ${className}`.trim()}
+      className={`rounded-[1rem] border px-3 py-2 text-[10.5px] leading-snug ${TONE_CLASSES[tone]} ${className}`.trim()}
     >
       {children}
     </div>
@@ -63,13 +63,13 @@ export function DashboardPanelState({
       className={`flex h-full w-full items-center rounded-[1.5rem] border p-4 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur ${TONE_CLASSES[tone]} ${minHeightClass}`.trim()}
     >
       <div className="max-w-sm space-y-1.5">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-300/55">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-300/52">
           Dashboard
         </div>
         <h2 className="text-sm font-semibold tracking-tight text-slate-50">
           {title}
         </h2>
-        <p className="text-sm text-slate-300/78">{body}</p>
+        <p className="text-sm leading-relaxed text-slate-300/76">{body}</p>
         {children ? <div className="pt-1">{children}</div> : null}
       </div>
     </div>
