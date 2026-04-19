@@ -281,16 +281,17 @@ export default function MoonNowCard({
 
       <section className="grid gap-2.5 lg:grid-cols-[minmax(0,1.15fr)_minmax(14rem,0.85fr)]">
         <div className="rounded-[1.1rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_40%,_rgba(2,6,23,0.92)_100%)] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <div className="flex items-start gap-3">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60">
+          <div className="flex min-h-[9.25rem] items-stretch gap-4">
+            <div className="flex aspect-square self-stretch shrink-0 items-center justify-center rounded-[1.35rem] border border-white/10 bg-slate-950/60 p-1.5">
               <MoonPhaseCircle
                 illuminationFrac={moon.illumination_fraction ?? undefined}
                 phaseAngleDeg={moon.phase_angle_deg ?? undefined}
-                size={56}
+                size={120}
+                className="h-full w-full"
               />
             </div>
 
-            <div className="min-w-0">
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
               <div className={DASHBOARD_METRIC_LABEL_CLASS}>Current phase</div>
               <div className="mt-1 text-[1.45rem] font-semibold leading-tight text-slate-50 sm:text-[1.6rem]">
                 {moon.phase_name ?? "—"}

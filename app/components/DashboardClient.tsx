@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MoonNowCard from "./MoonCardNow";
@@ -18,27 +19,30 @@ import {
   type CachedLocation,
 } from "../providers/LocationProvider";
 
-function DashboardSectionHeader({
+function DashboardSectionFrame({
   id,
-  eyebrow,
   title,
+  children,
 }: {
   id: string;
-  eyebrow: string;
   title: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="mb-2.5 sm:mb-3">
-      <p className="text-[10px] uppercase tracking-[0.24em] text-sky-200/48">
-        {eyebrow}
-      </p>
-      <h2
-        id={id}
-        className="mt-1 text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
-      >
-        {title}
-      </h2>
-    </div>
+    <section
+      aria-labelledby={id}
+      className="rounded-[1.7rem] border border-white/8 bg-white/[0.025] p-3 sm:p-4"
+    >
+      <div className="mb-3 border-b border-white/8 pb-2.5 sm:mb-3.5">
+        <h2
+          id={id}
+          className="text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
+        >
+          {title}
+        </h2>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -172,7 +176,7 @@ function DashboardContent({
         </div>
       ) : null}
 
-      <div className="relative mx-auto max-w-[1240px] px-4 py-4 sm:px-5 sm:py-5 xl:px-6 xl:py-6">
+      <div className="relative mx-auto max-w-[1240px] px-4 py-3 sm:px-5 sm:py-4 xl:px-6 xl:py-5">
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div
             className="absolute inset-0"
@@ -186,7 +190,7 @@ function DashboardContent({
           <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
         </div>
 
-        <header className="mb-5 flex flex-wrap items-start justify-between gap-4 sm:mb-6">
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-4 sm:mb-5">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.24em] text-sky-200/54">
               Lunar dashboard
@@ -215,14 +219,8 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <div className="space-y-5 sm:space-y-6">
-            <section aria-labelledby="current-moon-heading">
-              <DashboardSectionHeader
-                id="current-moon-heading"
-                eyebrow="Section 1"
-                title="Current Moon"
-              />
-
+          <div className="space-y-4 sm:space-y-5">
+            <DashboardSectionFrame id="current-moon-heading" title="Current Moon">
               <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
                 <section className="flex min-w-0 lg:col-span-8">
                   <MoonNowCard
@@ -243,15 +241,12 @@ function DashboardContent({
                   />
                 </section>
               </div>
-            </section>
+            </DashboardSectionFrame>
 
-            <section aria-labelledby="sky-timeline-heading">
-              <DashboardSectionHeader
-                id="sky-timeline-heading"
-                eyebrow="Section 2"
-                title="Today's Sky Timeline"
-              />
-
+            <DashboardSectionFrame
+              id="sky-timeline-heading"
+              title="Today's Sky Timeline"
+            >
               <div className="min-w-0">
                 <MoonAltitudeGraph
                   lat={active.latitude}
@@ -260,15 +255,12 @@ function DashboardContent({
                   label={active.label}
                 />
               </div>
-            </section>
+            </DashboardSectionFrame>
 
-            <section aria-labelledby="supporting-context-heading">
-              <DashboardSectionHeader
-                id="supporting-context-heading"
-                eyebrow="Section 3"
-                title="Supporting Context"
-              />
-
+            <DashboardSectionFrame
+              id="supporting-context-heading"
+              title="Supporting Context"
+            >
               <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
                 <section className="flex min-w-0 lg:col-span-7">
                   <MoonSupportingDetails
@@ -282,7 +274,7 @@ function DashboardContent({
                   <MoonCalendarPreview key={tz} tz={tz} />
                 </section>
               </div>
-            </section>
+            </DashboardSectionFrame>
           </div>
         ) : (
           <section className="mt-1">
