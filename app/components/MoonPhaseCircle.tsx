@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 type MoonPhaseCircleProps = {
   illuminationPct?: number; // 0-100
   illuminationFrac?: number; // 0-1
@@ -14,9 +16,12 @@ type MoonPhaseCircleProps = {
   cy?: number;
   r?: number;
   className?: string;
+  variant?: "flat" | "photo";
 };
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const MOON_TEXTURE_URL =
+  "https://commons.wikimedia.org/wiki/Special:Redirect/file/FullMoon2010.jpg";
 
 function normalizeDeg(deg: number): number {
   return ((deg % 360) + 360) % 360;
@@ -79,8 +84,10 @@ export function MoonPhaseCircle({
   cy = 50,
   r,
   className,
+  variant = "flat",
 }: MoonPhaseCircleProps) {
   const resolvedMode = mode ?? renderMode;
+  const idPrefix = useId().replace(/:/g, "-");
   const resolvedPct =
     illuminationPct ??
     (illuminationFrac != null && !Number.isNaN(illuminationFrac)
@@ -105,6 +112,8 @@ export function MoonPhaseCircle({
   const litFrac = hasAngle ? litFracFromAngle : litFracFromIllum;
   const resolvedWaxing = hasAngle ? normalizedPhaseDeg < 180 : waxing;
   const litPath = buildLitPath(cx, cy, resolvedR, litFrac, resolvedWaxing);
+  const clipId = `${idPrefix}-moon-clip`;
+  const litMaskId = `${idPrefix}-moon-lit-mask`;
 
   if (!hasIllum && !hasAngle) {
     if (resolvedMode === "g") {
@@ -142,22 +151,76 @@ export function MoonPhaseCircle({
     );
   }
 
-  const glyph = (
-    <g aria-hidden="true">
-      <circle cx={cx} cy={cy} r={resolvedR} fill="#020617" />
-      <g transform={`rotate(${safeTilt} ${cx} ${cy})`}>
-        {litPath ? <path d={litPath} fill="#f8fafc" /> : null}
+  const glyph =
+    variant === "photo" ? (
+      <g aria-hidden="true">
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx={cx} cy={cy} r={resolvedR} />
+          </clipPath>
+          <mask id={litMaskId} maskUnits="userSpaceOnUse">
+            <rect
+              x={cx - resolvedR - 1}
+              y={cy - resolvedR - 1}
+              width={resolvedR * 2 + 2}
+              height={resolvedR * 2 + 2}
+              fill="black"
+            />
+            <g transform={`rotate(${safeTilt} ${cx} ${cy})`}>
+              {litPath ? <path d={litPath} fill="white" /> : null}
+            </g>
+          </mask>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          <circle cx={cx} cy={cy} r={resolvedR} fill="#020617" />
+          <image
+            href={MOON_TEXTURE_URL}
+            x={cx - resolvedR}
+            y={cy - resolvedR}
+            width={resolvedR * 2}
+            height={resolvedR * 2}
+            preserveAspectRatio="xMidYMid slice"
+            opacity="0.2"
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={resolvedR}
+            fill="rgba(2,6,23,0.68)"
+          />
+          <image
+            href={MOON_TEXTURE_URL}
+            x={cx - resolvedR}
+            y={cy - resolvedR}
+            width={resolvedR * 2}
+            height={resolvedR * 2}
+            preserveAspectRatio="xMidYMid slice"
+            mask={`url(#${litMaskId})`}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={resolvedR}
+            fill="rgba(255,255,255,0.04)"
+          />
+        </g>
       </g>
-      <circle
-        cx={cx}
-        cy={cy}
-        r={resolvedR}
-        fill="none"
-        stroke="rgba(226,232,240,0.45)"
-        strokeWidth={strokeWidth}
-      />
-    </g>
-  );
+    ) : (
+      <g aria-hidden="true">
+        <circle cx={cx} cy={cy} r={resolvedR} fill="#020617" />
+        <g transform={`rotate(${safeTilt} ${cx} ${cy})`}>
+          {litPath ? <path d={litPath} fill="#f8fafc" /> : null}
+        </g>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={resolvedR}
+          fill="none"
+          stroke="rgba(226,232,240,0.45)"
+          strokeWidth={strokeWidth}
+        />
+      </g>
+    );
 
   if (resolvedMode === "g") {
     return glyph;

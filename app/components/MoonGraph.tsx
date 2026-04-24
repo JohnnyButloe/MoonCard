@@ -4,13 +4,17 @@ import { useId } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 import { useMoonCard } from "../hooks/useAstronomy";
+import { useWeatherNow } from "../hooks/useWeather";
+import type { WeatherCondition } from "../providers/weather";
 import {
   DashboardPanelState,
   DashboardSkeletonBlock,
   DashboardStatusBanner,
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import { SunDisc } from "./SunDisc";
 import {
+  DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
 } from "./moonDashboardShared";
@@ -23,29 +27,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
 
-type RGB = { r: number; g: number; b: number };
-
 type SkyStripe = {
   x: number;
   width: number;
-  zenith: RGB;
-  horizon: RGB;
   phase: TwilightPhase;
-};
-
-type Star = {
-  x: number;
-  y: number;
-  r: number;
-  opacity: number;
-};
-
-type Cloud = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  opacity: number;
 };
 
 type TwilightBand = {
@@ -78,61 +63,63 @@ const TWILIGHT_LEGEND_ORDER: TwilightPhase[] = [
   "dark",
 ];
 
-const SKY_PHASE_COLORS: Record<TwilightPhase, { zenith: RGB; horizon: RGB }> = {
-  day: {
-    zenith: { r: 35, g: 90, b: 165 },
-    horizon: { r: 170, g: 210, b: 235 },
-  },
-  civil: {
-    zenith: { r: 28, g: 60, b: 128 },
-    horizon: { r: 245, g: 188, b: 126 },
-  },
-  nautical: {
-    zenith: { r: 18, g: 34, b: 80 },
-    horizon: { r: 104, g: 78, b: 154 },
-  },
-  astronomical: {
-    zenith: { r: 8, g: 12, b: 28 },
-    horizon: { r: 34, g: 24, b: 60 },
-  },
-  dark: {
-    zenith: { r: 3, g: 4, b: 12 },
-    horizon: { r: 3, g: 4, b: 12 },
-  },
+const PHASE_WEATHER_IMAGE_OPACITY: Record<TwilightPhase, number> = {
+  day: 0.98,
+  civil: 0.86,
+  nautical: 0.48,
+  astronomical: 0.16,
+  dark: 0,
 };
 
-const PHASE_DARKNESS: Record<TwilightPhase, number> = {
+const PHASE_NIGHT_IMAGE_OPACITY: Record<TwilightPhase, number> = {
   day: 0,
-  civil: 0.08,
-  nautical: 0.45,
-  astronomical: 0.85,
+  civil: 0.18,
+  nautical: 0.56,
+  astronomical: 0.84,
   dark: 1,
 };
 
-const PHASE_DAYLIGHT: Record<TwilightPhase, number> = {
-  day: 1,
-  civil: 0.72,
-  nautical: 0.2,
-  astronomical: 0.05,
-  dark: 0,
+const PHASE_TINT_OPACITY: Record<TwilightPhase, number> = {
+  day: 0.08,
+  civil: 0.16,
+  nautical: 0.26,
+  astronomical: 0.38,
+  dark: 0.16,
+};
+
+const PHASE_NIGHT_SHADE_OPACITY: Record<TwilightPhase, number> = {
+  day: 0,
+  civil: 0.08,
+  nautical: 0.18,
+  astronomical: 0.34,
+  dark: 0.52,
+};
+
+const NIGHT_SKY_IMAGE_URL =
+  "https://commons.wikimedia.org/wiki/Special:Redirect/file/ESO%20-%20Milky%20Way.jpg";
+
+const WEATHER_SKY_IMAGE_URL: Record<WeatherCondition, string> = {
+  clear:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Clouds_in_blue_sky.jpg",
+  partly_cloudy:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Above_the_Clouds.jpg",
+  overcast:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Cloudy_sky_%2826171935906%29.jpg",
+  rain:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Storm_clouds.jpg",
+  snow:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Snowy_Polish_countryside_February_2015.jpg",
+  storm:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Storm_clouds.jpg",
+  fog:
+    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Cloudy_sky_%2826171935906%29.jpg",
 };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-const lerpRgb = (a: RGB, b: RGB, t: number): RGB => ({
-  r: lerp(a.r, b.r, t),
-  g: lerp(a.g, b.g, t),
-  b: lerp(a.b, b.b, t),
-});
-
-function rgbToCss(c: RGB, a = 1) {
-  return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a})`;
-}
-
-function noise(seed: number) {
-  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
-  return value - Math.floor(value);
+function resolveWeatherSkyImage(condition: WeatherCondition | undefined) {
+  return WEATHER_SKY_IMAGE_URL[condition ?? "clear"];
 }
 
 function normalizeTwilightPhase(phase?: string | null): TwilightPhase {
@@ -191,6 +178,29 @@ function timeToX(ms: number, dayStartMs: number, dayEndMs: number): number {
   return clamp01((ms - dayStartMs) / span) * VIEW_W;
 }
 
+function formatDegrees(value: number | null | undefined): string {
+  return typeof value === "number" ? `${Math.round(value)}°` : "—";
+}
+
+function toCompass(azDeg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((azDeg % 360) + 360) % 360;
+  return dirs[Math.round(normalized / 45) % dirs.length];
+}
+
+function formatAzimuthWithDirection(azDeg: number | null | undefined): string {
+  if (typeof azDeg !== "number") return "Azimuth unavailable";
+
+  const normalized = Math.round(((azDeg % 360) + 360) % 360);
+  return `${toCompass(normalized)} (${normalized}°)`;
+}
+
+function formatVisibilityLabel(isUp: boolean | null | undefined): string {
+  if (isUp === true) return "Above horizon";
+  if (isUp === false) return "Below horizon";
+  return "Horizon pending";
+}
+
 function buildTwilightBands(input: {
   dayStartMs: number;
   dayEndMs: number;
@@ -240,67 +250,18 @@ function buildSkyStripes(
   dayEndMs: number,
 ): SkyStripe[] {
   return bands.map((band) => {
-    const colors = SKY_PHASE_COLORS[band.phase];
     const x = timeToX(band.startMs, dayStartMs, dayEndMs);
     const endX = timeToX(band.endMs, dayStartMs, dayEndMs);
 
     return {
       x,
       width: Math.max(0.8, endX - x),
-      zenith: colors.zenith,
-      horizon: colors.horizon,
       phase: band.phase,
     };
   });
 }
 
-function buildStars(stripes: SkyStripe[]): Star[] {
-  const stars: Star[] = [];
-
-  for (let i = 0; i < stripes.length; i += 1) {
-    const stripe = stripes[i];
-    const darkness = PHASE_DARKNESS[stripe.phase];
-    if (darkness < 0.35) continue;
-
-    const starCount = Math.max(1, Math.round(2 + darkness * 5));
-    for (let j = 0; j < starCount; j += 1) {
-      const seed = i * 17 + j;
-      if (noise(seed + 11) > 0.82) continue;
-
-      stars.push({
-        x: stripe.x + stripe.width * noise(seed + 31),
-        y: 2 + noise(seed + 59) * (HORIZON_Y * 0.62),
-        r: 0.1 + noise(seed + 79) * 0.18,
-        opacity: 0.35 + darkness * 0.45 + noise(seed + 101) * 0.08,
-      });
-    }
-  }
-
-  return stars;
-}
-
-function buildClouds(stripes: SkyStripe[]): Cloud[] {
-  const clouds: Cloud[] = [];
-
-  for (let i = 0; i < stripes.length; i += 1) {
-    const stripe = stripes[i];
-    const daylight = PHASE_DAYLIGHT[stripe.phase];
-    if (daylight < 0.25) continue;
-    if (noise(i + 211) > 0.42) continue;
-
-    clouds.push({
-      x: stripe.x + stripe.width * (0.25 + noise(i + 223) * 0.5),
-      y: 4 + noise(i + 227) * (HORIZON_Y * 0.42),
-      width: 7 + noise(i + 229) * 10,
-      height: 1.6 + noise(i + 233) * 2.8,
-      opacity: 0.04 + daylight * 0.08 + noise(i + 239) * 0.03,
-    });
-  }
-
-  return clouds;
-}
-
-function buildCyclePosition(input: {
+export function buildCyclePosition(input: {
   nowMs: number;
   dayStartMs: number;
   dayEndMs: number;
@@ -333,6 +294,18 @@ function buildCyclePosition(input: {
     return 0.75 + ((nowClamped - setMs) / Math.max(1, input.dayEndMs - setMs)) * 0.25;
   }
 
+  if (riseMs !== null && setMs !== null && riseMs > setMs) {
+    if (nowClamped <= setMs) {
+      return 0.5 + ((nowClamped - input.dayStartMs) / Math.max(1, setMs - input.dayStartMs)) * 0.25;
+    }
+
+    if (nowClamped < riseMs) {
+      return 0.75 + ((nowClamped - setMs) / Math.max(1, riseMs - setMs)) * 0.5;
+    }
+
+    return 0.25 + ((nowClamped - riseMs) / Math.max(1, input.dayEndMs - riseMs)) * 0.25;
+  }
+
   if (input.isUp === true) {
     return 0.5;
   }
@@ -342,6 +315,46 @@ function buildCyclePosition(input: {
   }
 
   return fallback;
+}
+
+export function buildOrbitCurveY(input: {
+  nowMs: number;
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number | null;
+  setMs: number | null;
+  isUp: boolean | null;
+}) {
+  return yOnCurve(buildCyclePosition(input));
+}
+
+function buildTimedOrbitPath(input: {
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number | null;
+  setMs: number | null;
+  isUp: boolean | null;
+  samples?: number;
+}) {
+  const samples = input.samples ?? 220;
+  let d = "";
+
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples;
+    const ms = lerp(input.dayStartMs, input.dayEndMs, t);
+    const x = timeToX(ms, input.dayStartMs, input.dayEndMs);
+    const y = buildOrbitCurveY({
+      nowMs: ms,
+      dayStartMs: input.dayStartMs,
+      dayEndMs: input.dayEndMs,
+      riseMs: input.riseMs,
+      setMs: input.setMs,
+      isUp: input.isUp,
+    });
+    d += `${i === 0 ? "M" : "L"} ${formatPathNumber(x)},${formatPathNumber(y)} `;
+  }
+
+  return d.trim();
 }
 
 const CURVE_PATH = buildCurvePath(220);
@@ -358,6 +371,7 @@ export default function MoonAltitudeGraph({
   label?: string | null;
 }) {
   const summaryQ = useMoonCard(lat, lon, tz, { label });
+  const weatherQ = useWeatherNow(lat, lon);
   const idPrefix = useId().replace(/:/g, "-");
 
   if (summaryQ.error && !summaryQ.data) {
@@ -438,31 +452,58 @@ export default function MoonAltitudeGraph({
     segments: summary.twilight.segments,
   });
 
-  const cycleT = buildCyclePosition({
-    nowMs,
+  const sunriseMs = toUtcMs(summary.sun.sunrise);
+  const sunsetMs = toUtcMs(summary.sun.sunset);
+  const moonriseMs = toUtcMs(summary.moon.moonrise);
+  const moonsetMs = toUtcMs(summary.moon.moonset);
+  const nowX = timeToX(nowMs, dayStartMs, dayEndMs);
+  const moonDotX = nowX;
+  const sunDotX = nowX;
+  const moonDotY = buildOrbitCurveY({
     dayStartMs,
     dayEndMs,
-    riseMs: toUtcMs(summary.moon.moonrise),
-    setMs: toUtcMs(summary.moon.moonset),
+    nowMs,
+    riseMs: moonriseMs,
+    setMs: moonsetMs,
     isUp: summary.moon.is_up,
   });
-  const sunCycleT = buildCyclePosition({
-    nowMs,
+  const sunDotY = buildOrbitCurveY({
     dayStartMs,
     dayEndMs,
-    riseMs: toUtcMs(summary.sun.sunrise),
-    setMs: toUtcMs(summary.sun.sunset),
+    nowMs,
+    riseMs: sunriseMs,
+    setMs: sunsetMs,
     isUp: summary.sun.is_up,
   });
-
-  const dotX = cycleT * VIEW_W;
-  const dotY = yOnCurve(cycleT);
-  const sunDotX = sunCycleT * VIEW_W;
-  const sunDotY = yOnCurve(sunCycleT);
+  const sunCurvePath =
+    sunriseMs !== null || sunsetMs !== null
+      ? buildTimedOrbitPath({
+          dayStartMs,
+          dayEndMs,
+          riseMs: sunriseMs,
+          setMs: sunsetMs,
+          isUp: summary.sun.is_up,
+        })
+      : CURVE_PATH;
+  const moonCurvePath =
+    moonriseMs !== null || moonsetMs !== null
+      ? buildTimedOrbitPath({
+          dayStartMs,
+          dayEndMs,
+          riseMs: moonriseMs,
+          setMs: moonsetMs,
+          isUp: summary.moon.is_up,
+        })
+      : CURVE_PATH;
 
   const skyStripes = buildSkyStripes(twilightBands, dayStartMs, dayEndMs);
-  const stars = buildStars(skyStripes);
-  const clouds = buildClouds(skyStripes);
+  const weatherCondition = weatherQ.data?.condition;
+  const weatherCloudCover = clamp01((weatherQ.data?.cloudCoverPct ?? 0) / 100);
+  const weatherSkyImageUrl = resolveWeatherSkyImage(weatherCondition);
+  const nightSkyStrength = lerp(0.96, 0.64, weatherCloudCover);
+  const weatherSkyStrength = lerp(0.78, 0.96, weatherCloudCover);
+  const skyShadowOpacity = lerp(0.05, 0.16, weatherCloudCover);
+  const weatherAtmosphereOpacity = lerp(0.03, 0.12, weatherCloudCover);
 
   const nextPhaseStartLabel = TWILIGHT_LEGEND_ORDER.reduce(
     (acc, phase) => {
@@ -490,16 +531,52 @@ export default function MoonAltitudeGraph({
   const sunsetLegendLabel = summary.sun.sunset
     ? formatInTimeZone(new Date(summary.sun.sunset), tz, "h:mm a")
     : "—";
+  const moonriseLegendLabel = summary.moon.moonrise
+    ? formatInTimeZone(new Date(summary.moon.moonrise), tz, "h:mm a")
+    : "—";
+  const moonsetLegendLabel = summary.moon.moonset
+    ? formatInTimeZone(new Date(summary.moon.moonset), tz, "h:mm a")
+    : "—";
+  const compactContextItems = [
+    {
+      label: "Moon altitude",
+      value: formatDegrees(summary.moon.altitude_deg),
+      detail: `${formatAzimuthWithDirection(summary.moon.azimuth_deg)} · ${formatVisibilityLabel(summary.moon.is_up)}`,
+    },
+    {
+      label: "Sun altitude",
+      value: formatDegrees(summary.sun.altitude_deg),
+      detail: `${formatAzimuthWithDirection(summary.sun.azimuth_deg)} · ${formatVisibilityLabel(summary.sun.is_up)}`,
+    },
+    {
+      label: "Moonrise",
+      value: moonriseLegendLabel,
+      detail: "Moon clears the horizon.",
+    },
+    {
+      label: "Moonset",
+      value: moonsetLegendLabel,
+      detail: "Moon drops below the horizon.",
+    },
+    {
+      label: "Sunrise",
+      value: sunriseLegendLabel,
+      detail: "Sun reaches the horizon.",
+    },
+    {
+      label: "Sunset",
+      value: sunsetLegendLabel,
+      detail: "Sun drops below the horizon.",
+    },
+  ];
 
   const lastUpdatedLabel = summaryQ.dataUpdatedAt
     ? formatInTimeZone(new Date(summaryQ.dataUpdatedAt), tz, "h:mm a")
     : "—";
 
   const plotClipId = `${idPrefix}-plotClip`;
-  const aboveHorizonClipId = `${idPrefix}-aboveHorizon`;
-  const auraBlurId = `${idPrefix}-auraBlur`;
-  const cloudBlurId = `${idPrefix}-cloudBlur`;
-  const starGlowId = `${idPrefix}-starGlow`;
+  const sunAuraBlurId = `${idPrefix}-sunAuraBlur`;
+  const moonAuraBlurId = `${idPrefix}-moonAuraBlur`;
 
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
@@ -541,54 +618,100 @@ export default function MoonAltitudeGraph({
                 <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
               </clipPath>
 
-              <clipPath id={aboveHorizonClipId}>
-                <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} />
-              </clipPath>
-
-              <filter id={auraBlurId} x="-50%" y="-50%" width="200%" height="200%">
+              <filter id={sunAuraBlurId} x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="10" />
               </filter>
 
-              <filter id={cloudBlurId} x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="1.2" />
+              <filter id={moonAuraBlurId} x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="9" />
               </filter>
 
-              <filter id={starGlowId} x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="0.12" />
-              </filter>
-
-              {skyStripes.map((stripe, idx) => {
-                const gradId = `${idPrefix}-sky-${idx}`;
-                const mid = lerpRgb(stripe.zenith, stripe.horizon, 0.4);
-
-                return (
-                  <linearGradient key={gradId} id={gradId} x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={rgbToCss(stripe.zenith, 1)} />
-                    <stop offset="65%" stopColor={rgbToCss(mid, 1)} />
-                    <stop offset="100%" stopColor={rgbToCss(stripe.horizon, 1)} />
-                  </linearGradient>
-                );
-              })}
+              {skyStripes.map((stripe, idx) => (
+                <clipPath key={`${idPrefix}-sky-stripe-${idx}`} id={`${idPrefix}-sky-stripe-${idx}`}>
+                  <rect x={stripe.x} y="0" width={stripe.width} height={HORIZON_Y} />
+                </clipPath>
+              ))}
             </defs>
 
             <g clipPath={`url(#${plotClipId})`}>
               <g id="bg">
-                {skyStripes.map((stripe, idx) => (
-                  <rect
-                    key={`sky-col-${idx}`}
-                    x={stripe.x}
-                    y="0"
-                    width={stripe.width}
-                    height={HORIZON_Y}
-                    fill={`url(#${idPrefix}-sky-${idx})`}
-                  />
-                ))}
+                <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} fill="#020617" />
+                <image
+                  href={weatherSkyImageUrl}
+                  x="0"
+                  y="0"
+                  width={VIEW_W}
+                  height={HORIZON_Y}
+                  preserveAspectRatio="xMidYMid slice"
+                  opacity={weatherSkyStrength}
+                />
+                {skyStripes.map((stripe, idx) => {
+                  const weatherOpacity =
+                    PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] * weatherSkyStrength;
+                  const nightOpacity =
+                    PHASE_NIGHT_IMAGE_OPACITY[stripe.phase] * nightSkyStrength;
+
+                  return (
+                    <g
+                      key={`sky-col-${idx}`}
+                      clipPath={`url(#${idPrefix}-sky-stripe-${idx})`}
+                    >
+                      {weatherOpacity > 0 ? (
+                        <image
+                          href={weatherSkyImageUrl}
+                          x="0"
+                          y="0"
+                          width={VIEW_W}
+                          height={HORIZON_Y}
+                          preserveAspectRatio="xMidYMid slice"
+                          opacity={weatherOpacity}
+                        />
+                      ) : null}
+                      {nightOpacity > 0 ? (
+                        <image
+                          href={NIGHT_SKY_IMAGE_URL}
+                          x="0"
+                          y="0"
+                          width={VIEW_W}
+                          height={HORIZON_Y}
+                          preserveAspectRatio="xMidYMid slice"
+                          opacity={nightOpacity}
+                        />
+                      ) : null}
+                      <rect
+                        x={stripe.x}
+                        y="0"
+                        width={stripe.width}
+                        height={HORIZON_Y}
+                        fill={TWILIGHT_BAND_COLOR[stripe.phase]}
+                        opacity={PHASE_TINT_OPACITY[stripe.phase]}
+                      />
+                      {PHASE_NIGHT_SHADE_OPACITY[stripe.phase] > 0 ? (
+                        <rect
+                          x={stripe.x}
+                          y="0"
+                          width={stripe.width}
+                          height={HORIZON_Y}
+                          fill="rgba(2,6,23,0.96)"
+                          opacity={PHASE_NIGHT_SHADE_OPACITY[stripe.phase]}
+                        />
+                      ) : null}
+                    </g>
+                  );
+                })}
                 <rect
                   x="0"
                   y="0"
                   width={VIEW_W}
                   height={HORIZON_Y}
-                  fill="rgba(0,0,0,0.12)"
+                  fill={`rgba(226,232,240,${weatherAtmosphereOpacity})`}
+                />
+                <rect
+                  x="0"
+                  y="0"
+                  width={VIEW_W}
+                  height={HORIZON_Y}
+                  fill={`rgba(2,6,23,${skyShadowOpacity})`}
                 />
                 <rect
                   x="0"
@@ -597,59 +720,6 @@ export default function MoonAltitudeGraph({
                   height={VIEW_H - HORIZON_Y}
                   fill="#000"
                 />
-              </g>
-
-              <g
-                id="stars"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                filter={`url(#${starGlowId})`}
-              >
-                {stars.map((star, idx) => (
-                  <g key={`star-${idx}`} opacity={star.opacity}>
-                    <circle cx={star.x} cy={star.y} r={star.r} fill="#f8fafc" />
-                    {star.r > 0.22 ? (
-                      <path
-                        d={`M ${formatPathNumber(star.x - star.r * 1.35)},${formatPathNumber(star.y)} L ${formatPathNumber(star.x + star.r * 1.35)},${formatPathNumber(star.y)} M ${formatPathNumber(star.x)},${formatPathNumber(star.y - star.r * 1.35)} L ${formatPathNumber(star.x)},${formatPathNumber(star.y + star.r * 1.35)}`}
-                        stroke="rgba(248,250,252,0.5)"
-                        strokeWidth="0.08"
-                        strokeLinecap="round"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    ) : null}
-                  </g>
-                ))}
-              </g>
-
-              <g
-                id="clouds"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                filter={`url(#${cloudBlurId})`}
-              >
-                {clouds.map((cloud, idx) => (
-                  <g key={`cloud-${idx}`} opacity={cloud.opacity}>
-                    <ellipse
-                      cx={cloud.x}
-                      cy={cloud.y}
-                      rx={cloud.width * 0.28}
-                      ry={cloud.height * 0.62}
-                      fill="rgba(255,255,255,0.95)"
-                    />
-                    <ellipse
-                      cx={cloud.x - cloud.width * 0.18}
-                      cy={cloud.y + cloud.height * 0.08}
-                      rx={cloud.width * 0.2}
-                      ry={cloud.height * 0.5}
-                      fill="rgba(255,255,255,0.86)"
-                    />
-                    <ellipse
-                      cx={cloud.x + cloud.width * 0.16}
-                      cy={cloud.y + cloud.height * 0.1}
-                      rx={cloud.width * 0.22}
-                      ry={cloud.height * 0.48}
-                      fill="rgba(255,255,255,0.82)"
-                    />
-                  </g>
-                ))}
               </g>
 
               <g id="lines">
@@ -663,93 +733,84 @@ export default function MoonAltitudeGraph({
                   vectorEffect="non-scaling-stroke"
                 />
                 <path
-                  d={CURVE_PATH}
-                  stroke="rgba(191,219,254,0.8)"
+                  d={sunCurvePath}
+                  stroke="rgba(250,204,21,0.84)"
+                  strokeWidth="1.15"
+                  vectorEffect="non-scaling-stroke"
+                  fill="none"
+                />
+                <path
+                  d={moonCurvePath}
+                  stroke="rgba(226,232,240,0.76)"
                   strokeWidth="1.05"
                   vectorEffect="non-scaling-stroke"
                   fill="none"
                 />
               </g>
 
-              <g
-                id="glow-contrast"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                filter={`url(#${auraBlurId})`}
-              >
-                <circle cx={dotX} cy={dotY} r="12" fill="#020617" opacity="0.16" />
-                <circle cx={sunDotX} cy={sunDotY} r="10" fill="#020617" opacity="0.12" />
+              <g filter={`url(#${sunAuraBlurId})`}>
+                <circle cx={sunDotX} cy={sunDotY} r="12" fill="rgba(255,220,120,0.32)" />
               </g>
 
-              <g
-                id="glow"
-                clipPath={`url(#${aboveHorizonClipId})`}
-                style={{ mixBlendMode: "screen" }}
-                filter={`url(#${auraBlurId})`}
-              >
-                <circle cx={dotX} cy={dotY} r="16" fill="rgba(180,210,255,0.38)" />
-                <circle cx={sunDotX} cy={sunDotY} r="14" fill="rgba(255,220,120,0.46)" />
+              <g filter={`url(#${moonAuraBlurId})`}>
+                <circle cx={moonDotX} cy={moonDotY} r="12" fill="rgba(180,210,255,0.24)" />
               </g>
 
               <g id="markers">
                 <MoonPhaseCircle
                   mode="g"
-                  cx={dotX}
-                  cy={dotY}
+                  cx={moonDotX}
+                  cy={moonDotY}
                   r={2.1}
                   size={15}
                   illuminationFrac={summary.moon.illumination_fraction ?? undefined}
                   phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
+                  variant="photo"
                 />
-                <circle cx={sunDotX} cy={sunDotY} r="1.8" fill="#fde047" />
+                <SunDisc mode="g" cx={sunDotX} cy={sunDotY} r={1.8} size={15} />
               </g>
             </g>
           </svg>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-white/8 pt-2.5 text-[10px] text-slate-200/68">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-          <MoonPhaseCircle
-            illuminationFrac={summary.moon.illumination_fraction ?? undefined}
-            phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
-            size={12}
-            className="shrink-0"
-          />
-          Moon now
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-          <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
-          Sun now
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-          <span className="block h-px w-4 bg-slate-300/78" />
-          Horizon
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-          <span className="h-2 w-2 rounded-full bg-yellow-200 ring-1 ring-white/15" />
-          Sunrise <span className="font-semibold text-slate-100">{sunriseLegendLabel}</span>
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-          <span className="h-2 w-2 rounded-full bg-orange-300 ring-1 ring-white/15" />
-          Sunset <span className="font-semibold text-slate-100">{sunsetLegendLabel}</span>
-        </span>
-        {TWILIGHT_LEGEND_ORDER.map((phase) => (
-          <span
-            key={phase}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1"
-          >
+      <div className="border-t border-white/8 pt-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/68">
+          {TWILIGHT_LEGEND_ORDER.map((phase) => (
             <span
-              className="h-2 w-2 rounded-sm ring-1 ring-white/15"
-              style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
-            />
-            <span className="uppercase tracking-[0.14em] text-sky-100/58">
-              {TWILIGHT_LABEL[phase]}
+              key={phase}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1"
+            >
+              <span
+                className="h-2 w-2 rounded-sm ring-1 ring-white/15"
+                style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
+              />
+              <span className="uppercase tracking-[0.14em] text-sky-100/58">
+                {TWILIGHT_LABEL[phase]}
+              </span>
+              <span className="font-semibold tracking-normal text-slate-100">
+                {nextPhaseStartLabel[phase]}
+              </span>
             </span>
-            <span className="font-semibold tracking-normal text-slate-100">
-              {nextPhaseStartLabel[phase]}
-            </span>
-          </span>
-        ))}
+          ))}
+        </div>
+
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+          {compactContextItems.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-[0.95rem] border border-white/8 bg-white/[0.025] px-2.5 py-2"
+            >
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
+              <div className="mt-1 text-sm font-semibold leading-tight text-slate-100">
+                {item.value}
+              </div>
+              <div className="mt-1 text-[10px] leading-relaxed text-slate-300/62">
+                {item.detail}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
