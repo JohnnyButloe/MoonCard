@@ -18,15 +18,6 @@ import {
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 
-function formatTwilightLabel(value: string | null | undefined): string {
-  if (!value) return "—";
-
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export default function MoonSupportingDetails({
   lat,
   lon,
@@ -153,24 +144,12 @@ export default function MoonSupportingDetails({
         ))}
       </section>
 
-      <section className="grid gap-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <div className={DASHBOARD_SURFACE_CLASS}>
-          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
-          <div className="mt-1 text-sm font-semibold text-slate-50">
-            {viewingLabel}
-          </div>
-          <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
+      <section className={DASHBOARD_SURFACE_CLASS}>
+        <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
+        <div className="mt-1 text-sm font-semibold text-slate-50">
+          {viewingLabel}
         </div>
-
-        <div className={DASHBOARD_SURFACE_CLASS}>
-          <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight</div>
-          <div className="mt-1 text-sm font-semibold text-slate-50">
-            {formatTwilightLabel(summary.twilight.current_phase)}
-          </div>
-          <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>
-            Next transition {formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz)}
-          </div>
-        </div>
+        <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
       </section>
 
       <footer className={DASHBOARD_META_FOOTER_CLASS}>

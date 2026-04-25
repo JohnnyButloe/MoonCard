@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MoonNowCard from "./MoonCardNow";
+import MoonSkySummaryBanner from "./MoonSkySummaryBanner";
 import MoonContextCard from "./MoonContextCard";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
 import MoonCalendarPreview from "./MoonCalendarPreview";
-import MoonSupportingDetails from "./MoonSupportingDetails";
+import MoonPhaseCalendar from "./MoonPhaseCalendar";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
 import { DashboardPanelState } from "./DashboardState";
@@ -25,22 +26,24 @@ function DashboardSectionFrame({
   children,
 }: {
   id: string;
-  title: string;
+  title?: string;
   children: ReactNode;
 }) {
   return (
     <section
-      aria-labelledby={id}
+      aria-labelledby={title ? id : undefined}
       className="rounded-[1.7rem] border border-white/8 bg-white/[0.025] p-3 sm:p-4"
     >
-      <div className="mb-3 border-b border-white/8 pb-2.5 sm:mb-3.5">
-        <h2
-          id={id}
-          className="text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
-        >
-          {title}
-        </h2>
-      </div>
+      {title ? (
+        <div className="mb-3 border-b border-white/8 pb-2.5 sm:mb-3.5">
+          <h2
+            id={id}
+            className="text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
+          >
+            {title}
+          </h2>
+        </div>
+      ) : null}
       {children}
     </section>
   );
@@ -204,6 +207,7 @@ function DashboardContent({
               label={active.label}
               latitude={active.latitude}
               longitude={active.longitude}
+              tz={tz}
               source={active.source}
               onClick={() => setIsLocationEditorOpen(true)}
             />
@@ -220,26 +224,35 @@ function DashboardContent({
 
         {hasActiveLocation ? (
           <div className="space-y-4 sm:space-y-5">
-            <DashboardSectionFrame id="current-moon-heading" title="Current Moon">
-              <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
-                <section className="flex min-w-0 lg:col-span-8">
-                  <MoonNowCard
-                    lat={active.latitude}
-                    lon={active.longitude}
-                    tz={tz}
-                    label={active.label}
-                  />
-                </section>
-                <section className="flex min-w-0 lg:col-span-4">
-                  <MoonContextCard
-                    lat={active.latitude}
-                    lon={active.longitude}
-                    tz={tz}
-                    label={active.label}
-                    source={active.source}
-                    onEditLocation={() => setIsLocationEditorOpen(true)}
-                  />
-                </section>
+            <DashboardSectionFrame id="current-moon-heading">
+              <div className="space-y-3.5 lg:space-y-4">
+                <MoonSkySummaryBanner
+                  lat={active.latitude}
+                  lon={active.longitude}
+                  tz={tz}
+                  label={active.label}
+                />
+
+                <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
+                  <section className="flex min-w-0 lg:col-span-8">
+                    <MoonNowCard
+                      lat={active.latitude}
+                      lon={active.longitude}
+                      tz={tz}
+                      label={active.label}
+                    />
+                  </section>
+                  <section className="flex min-w-0 lg:col-span-4">
+                    <MoonContextCard
+                      lat={active.latitude}
+                      lon={active.longitude}
+                      tz={tz}
+                      label={active.label}
+                      source={active.source}
+                      onEditLocation={() => setIsLocationEditorOpen(true)}
+                    />
+                  </section>
+                </div>
               </div>
             </DashboardSectionFrame>
 
@@ -258,20 +271,15 @@ function DashboardContent({
             </DashboardSectionFrame>
 
             <DashboardSectionFrame
-              id="supporting-context-heading"
-              title="Supporting Context"
+              id="lunar-calendar-heading"
+              title="Lunar Calendar"
             >
               <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
-                <section className="flex min-w-0 lg:col-span-7">
-                  <MoonSupportingDetails
-                    lat={active.latitude}
-                    lon={active.longitude}
-                    tz={tz}
-                    label={active.label}
-                  />
+                <section className="flex min-w-0 lg:col-span-8">
+                  <MoonPhaseCalendar key={tz} tz={tz} compact />
                 </section>
-                <section className="flex min-w-0 lg:col-span-5">
-                  <MoonCalendarPreview key={tz} tz={tz} />
+                <section className="flex min-w-0 lg:col-span-4">
+                  <MoonCalendarPreview key={`${tz}-events`} tz={tz} title="Next lunar events" />
                 </section>
               </div>
             </DashboardSectionFrame>

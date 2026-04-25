@@ -141,6 +141,15 @@ export default function MoonContextCard({
           : weatherQ.isLoading
             ? "Syncing live weather"
             : "Live conditions";
+  const visibilitySummary =
+    summaryQ.data?.visibility.summary ??
+    "Viewing guidance is unavailable for this update.";
+  const viewingLabel =
+    summaryQ.data?.visibility.is_dark_enough_for_viewing === true
+      ? "Good viewing"
+      : summaryQ.data?.visibility.is_dark_enough_for_viewing === false
+        ? "Bright sky"
+        : "Viewing unknown";
   const updatedLabel =
     summaryQ.dataUpdatedAt > 0
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
@@ -151,7 +160,7 @@ export default function MoonContextCard({
       <header className={DASHBOARD_PANEL_HEADER_CLASS}>
         <div className="min-w-0">
           <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Context</p>
-          <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Location & weather</h2>
+          <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Viewing conditions & weather</h2>
         </div>
         {onEditLocation ? (
           <button
@@ -177,22 +186,11 @@ export default function MoonContextCard({
       ) : null}
 
       <section className={DASHBOARD_SURFACE_CLASS}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Location</div>
-            <div className="mt-1 truncate text-base font-semibold text-slate-50">
-              {label}
-            </div>
-          </div>
-          <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-300/72">
-            {sourceLabel(source)}
-          </span>
+        <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
+        <div className="mt-1 text-base font-semibold text-slate-50">
+          {viewingLabel}
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300/72">
-          <span>{formatCoordinate(lat)}</span>
-          <span>{formatCoordinate(lon)}</span>
-          <span>{tz}</span>
-        </div>
+        <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
       </section>
 
       <section className="grid grid-cols-2 gap-2">

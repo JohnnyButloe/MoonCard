@@ -168,11 +168,11 @@ export default function MoonNowCard({
 
         <DashboardSkeletonBlock className="h-[7.2rem] rounded-[1.2rem]" />
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`moon-now-skeleton-${index}`}
-              className="h-[4.8rem] rounded-xl"
+              className="h-[4.35rem] rounded-xl"
             />
           ))}
         </div>
@@ -261,7 +261,6 @@ export default function MoonNowCard({
         : weatherQ.isLoading
           ? "Loading weather"
           : "Weather live";
-
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
       <header className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
@@ -332,20 +331,20 @@ export default function MoonNowCard({
       </section>
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[5.5rem] flex-col justify-between`}>
+        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[4.75rem] flex-col justify-between px-3 py-2.5`}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Illumination</div>
-          <div className="mt-1 text-[1.3rem] font-semibold leading-none text-slate-50">
+          <div className="mt-1 text-[1.2rem] font-semibold leading-none text-slate-50">
             {formatPercent(moon.illumination_percent)}
           </div>
           <div className="mt-1 text-[11px] text-slate-300/66">Moonlight</div>
         </div>
 
         <div
-          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[5.5rem] px-3 py-2.5`}
+          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[4.75rem] px-3 py-2.5`}
         >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Altitude</div>
-            <div className="mt-1 text-[1.18rem] font-semibold leading-tight text-slate-50">
+            <div className="mt-1 text-[1.08rem] font-semibold leading-tight text-slate-50">
               {formatDegrees(moon.altitude_deg)}
             </div>
             <div className="mt-1 text-[11px] text-slate-300/66">
@@ -359,11 +358,11 @@ export default function MoonNowCard({
         </div>
 
         <div
-          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[5.5rem] px-3 py-2.5`}
+          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[4.75rem] px-3 py-2.5`}
         >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Azimuth</div>
-            <div className="mt-1 text-[0.98rem] font-semibold leading-snug text-slate-50">
+            <div className="mt-1 text-[0.96rem] font-semibold leading-snug text-slate-50">
               {formatAzimuthWithDirection(moon.azimuth_deg)}
             </div>
             <div className="mt-1 text-[11px] text-slate-300/66">Compass bearing</div>
@@ -375,7 +374,7 @@ export default function MoonNowCard({
           </div>
         </div>
 
-        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[5.5rem] flex-col justify-between`}>
+        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[4.75rem] flex-col justify-between px-3 py-2.5`}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Visible</div>
           <div className="mt-1 text-sm font-semibold text-slate-50">
             {visibilityState.label}

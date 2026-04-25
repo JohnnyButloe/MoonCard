@@ -17,6 +17,7 @@ import {
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
+  formatTimeOrDateTime,
 } from "./moonDashboardShared";
 
 const VIEW_W = 160;
@@ -199,6 +200,15 @@ function formatVisibilityLabel(isUp: boolean | null | undefined): string {
   if (isUp === true) return "Above horizon";
   if (isUp === false) return "Below horizon";
   return "Horizon pending";
+}
+
+function formatTwilightLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildTwilightBands(input: {
@@ -538,6 +548,11 @@ export default function MoonAltitudeGraph({
     ? formatInTimeZone(new Date(summary.moon.moonset), tz, "h:mm a")
     : "—";
   const compactContextItems = [
+    {
+      label: "Twilight",
+      value: formatTwilightLabel(summary.twilight.current_phase),
+      detail: `Next transition ${formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz)}`,
+    },
     {
       label: "Moon altitude",
       value: formatDegrees(summary.moon.altitude_deg),

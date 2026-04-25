@@ -17,7 +17,13 @@ function formatRangeDate(dateIso: string, tz: string) {
   return formatInTimeZone(fromZonedTime(`${dateIso}T12:00:00`, tz), tz, "MMM d");
 }
 
-export default function MoonPhaseCalendar({ tz }: { tz: string }) {
+export default function MoonPhaseCalendar({
+  tz,
+  compact = false,
+}: {
+  tz: string;
+  compact?: boolean;
+}) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
@@ -67,9 +73,18 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
     };
   }, [selectedPhaseKey]);
 
+  const panelMinHeightClass = compact ? "min-h-[16rem]" : "min-h-[19rem]";
+  const dayCellHeightClass = compact ? "h-[2.35rem]" : "h-[2.85rem]";
+  const dayCellPaddingClass = compact ? "px-1.25 py-0.75" : "px-1.5 py-1";
+  const dayNumberClass = compact
+    ? "text-[12px] font-semibold leading-none text-slate-100"
+    : "text-[13px] font-semibold leading-none text-slate-100";
+  const iconSize = compact ? 10 : 12;
+  const gridGapClass = compact ? "gap-[0.35rem]" : "gap-0.5";
+
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
-      <section ref={rootRef} className="flex min-h-[19rem] flex-1 flex-col gap-2.5">
+      <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2.5`}>
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
@@ -78,7 +93,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           <DashboardSkeletonBlock className="h-8 w-32 rounded-full" />
         </div>
 
-        <div className="grid grid-cols-7 gap-0.5">
+        <div className={`grid grid-cols-7 ${gridGapClass}`}>
           {Array.from({ length: 7 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`calendar-heading-skeleton-${index}`}
@@ -87,11 +102,11 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-0.5">
+        <div className={`grid grid-cols-7 ${gridGapClass}`}>
           {Array.from({ length: 35 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`calendar-day-skeleton-${index}`}
-              className="h-[2.85rem] rounded-lg"
+              className={`${dayCellHeightClass} rounded-lg`}
             />
           ))}
         </div>
@@ -110,7 +125,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           title="Phase window unavailable"
           body="The calendar could not load this window."
           tone="danger"
-          minHeightClass="min-h-[19rem]"
+          minHeightClass={panelMinHeightClass}
         />
       </section>
     );
@@ -122,7 +137,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
         <DashboardPanelState
           title="Phase window unavailable"
           body="The calendar is still waiting for phase data."
-          minHeightClass="min-h-[19rem]"
+          minHeightClass={panelMinHeightClass}
         />
       </section>
     );
@@ -149,7 +164,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
         <DashboardPanelState
           title="No phases in this window"
           body="Try another week to load upcoming major phases."
-          minHeightClass="min-h-[19rem]"
+          minHeightClass={panelMinHeightClass}
         />
       </section>
     );
@@ -159,7 +174,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
   const rangeLabel = `${formatRangeDate(meta.window_start_local_date, tz)} - ${formatRangeDate(meta.window_end_local_date, tz)}`;
 
   return (
-    <section ref={rootRef} className="flex min-h-[19rem] flex-1 flex-col gap-2.5">
+    <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2.5`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
@@ -209,7 +224,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
         </DashboardStatusBanner>
       ) : null}
 
-      <div className="grid grid-cols-7 gap-0.5 text-[9px] uppercase tracking-[0.15em] text-slate-400/76">
+      <div className={`grid grid-cols-7 ${gridGapClass} text-[9px] uppercase tracking-[0.15em] text-slate-400/76`}>
         {dayLabels.map((label, index) => (
           <div key={`${label}-${index}`} className="px-1 text-center">
             {label}
@@ -217,7 +232,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5">
+      <div className={`grid grid-cols-7 ${gridGapClass}`}>
         {days.map((day, index) => {
           const dayNumber = String(Number(day.date_local.slice(-2)));
           const isPast = day.date_local < meta.today_local_date;
@@ -237,14 +252,14 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
           return (
             <div
               key={day.date_local}
-              className={`relative flex h-[2.85rem] flex-col rounded-lg border px-1.5 py-1 transition ${
+              className={`relative flex ${dayCellHeightClass} flex-col rounded-lg border ${dayCellPaddingClass} transition ${
                 primaryEntry
                   ? "border-sky-300/32 bg-sky-400/8 shadow-[0_0_0_1px_rgba(125,211,252,0.04)]"
                   : "border-white/8 bg-slate-950/30"
               } ${day.is_today ? "ring-1 ring-sky-300/55" : ""} ${isPast ? "opacity-55" : ""}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[13px] font-semibold leading-none text-slate-100">
+                <div className={dayNumberClass}>
                   {dayNumber}
                 </div>
                 {day.is_today ? (
@@ -267,7 +282,7 @@ export default function MoonPhaseCalendar({ tz }: { tz: string }) {
                 >
                   <MoonPhaseCircle
                     className="shrink-0"
-                    size={12}
+                    size={iconSize}
                     illuminationFrac={primaryEntry.illumination_frac}
                     waxing={primaryEntry.waxing}
                     phaseAngleDeg={primaryEntry.phase_angle_deg}
