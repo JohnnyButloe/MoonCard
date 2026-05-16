@@ -66,38 +66,53 @@ const TWILIGHT_LEGEND_ORDER: TwilightPhase[] = [
 
 const PHASE_WEATHER_IMAGE_OPACITY: Record<TwilightPhase, number> = {
   day: 0.98,
-  civil: 0.86,
-  nautical: 0.48,
-  astronomical: 0.16,
+  civil: 0.68,
+  nautical: 0.18,
+  astronomical: 0.04,
   dark: 0,
 };
 
 const PHASE_NIGHT_IMAGE_OPACITY: Record<TwilightPhase, number> = {
   day: 0,
   civil: 0.18,
-  nautical: 0.56,
-  astronomical: 0.84,
+  nautical: 0.52,
+  astronomical: 0.82,
   dark: 1,
 };
 
 const PHASE_TINT_OPACITY: Record<TwilightPhase, number> = {
   day: 0.08,
-  civil: 0.16,
-  nautical: 0.26,
-  astronomical: 0.38,
-  dark: 0.16,
+  civil: 0.1,
+  nautical: 0.12,
+  astronomical: 0.08,
+  dark: 0,
 };
 
 const PHASE_NIGHT_SHADE_OPACITY: Record<TwilightPhase, number> = {
   day: 0,
-  civil: 0.08,
-  nautical: 0.18,
-  astronomical: 0.34,
-  dark: 0.52,
+  civil: 0.1,
+  nautical: 0.08,
+  astronomical: 0.04,
+  dark: 0,
 };
 
-const NIGHT_SKY_IMAGE_URL =
-  "https://commons.wikimedia.org/wiki/Special:Redirect/file/ESO%20-%20Milky%20Way.jpg";
+const PHASE_ATMOSPHERE_OPACITY: Record<TwilightPhase, number> = {
+  day: 1,
+  civil: 0.52,
+  nautical: 0.18,
+  astronomical: 0.06,
+  dark: 0,
+};
+
+const PHASE_SKY_SHADOW_OPACITY: Record<TwilightPhase, number> = {
+  day: 0.35,
+  civil: 0.24,
+  nautical: 0.08,
+  astronomical: 0.03,
+  dark: 0,
+};
+
+const NIGHT_SKY_IMAGE_URL = "/sky/night-starfield.svg";
 
 const WEATHER_SKY_IMAGE_URL: Record<WeatherCondition, string> = {
   clear:
@@ -564,11 +579,6 @@ export default function MoonAltitudeGraph({
       detail: `${formatAzimuthWithDirection(summary.sun.azimuth_deg)} · ${formatVisibilityLabel(summary.sun.is_up)}`,
     },
     {
-      label: "Moonrise",
-      value: moonriseLegendLabel,
-      detail: "Moon clears the horizon.",
-    },
-    {
       label: "Moonset",
       value: moonsetLegendLabel,
       detail: "Moon drops below the horizon.",
@@ -651,15 +661,6 @@ export default function MoonAltitudeGraph({
             <g clipPath={`url(#${plotClipId})`}>
               <g id="bg">
                 <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} fill="#020617" />
-                <image
-                  href={weatherSkyImageUrl}
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={HORIZON_Y}
-                  preserveAspectRatio="xMidYMid slice"
-                  opacity={weatherSkyStrength}
-                />
                 {skyStripes.map((stripe, idx) => {
                   const weatherOpacity =
                     PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] * weatherSkyStrength;
@@ -685,12 +686,22 @@ export default function MoonAltitudeGraph({
                       {nightOpacity > 0 ? (
                         <image
                           href={NIGHT_SKY_IMAGE_URL}
-                          x="0"
+                          x={stripe.x}
                           y="0"
-                          width={VIEW_W}
+                          width={stripe.width}
                           height={HORIZON_Y}
                           preserveAspectRatio="xMidYMid slice"
                           opacity={nightOpacity}
+                        />
+                      ) : null}
+                      {PHASE_NIGHT_SHADE_OPACITY[stripe.phase] > 0 ? (
+                        <rect
+                          x={stripe.x}
+                          y="0"
+                          width={stripe.width}
+                          height={HORIZON_Y}
+                          fill="rgba(0,0,0,1)"
+                          opacity={PHASE_NIGHT_SHADE_OPACITY[stripe.phase]}
                         />
                       ) : null}
                       <rect
@@ -701,33 +712,29 @@ export default function MoonAltitudeGraph({
                         fill={TWILIGHT_BAND_COLOR[stripe.phase]}
                         opacity={PHASE_TINT_OPACITY[stripe.phase]}
                       />
-                      {PHASE_NIGHT_SHADE_OPACITY[stripe.phase] > 0 ? (
+                      {PHASE_ATMOSPHERE_OPACITY[stripe.phase] > 0 ? (
                         <rect
                           x={stripe.x}
                           y="0"
                           width={stripe.width}
                           height={HORIZON_Y}
-                          fill="rgba(2,6,23,0.96)"
-                          opacity={PHASE_NIGHT_SHADE_OPACITY[stripe.phase]}
+                          fill={`rgba(226,232,240,${weatherAtmosphereOpacity})`}
+                          opacity={PHASE_ATMOSPHERE_OPACITY[stripe.phase]}
+                        />
+                      ) : null}
+                      {PHASE_SKY_SHADOW_OPACITY[stripe.phase] > 0 ? (
+                        <rect
+                          x={stripe.x}
+                          y="0"
+                          width={stripe.width}
+                          height={HORIZON_Y}
+                          fill={`rgba(2,6,23,${skyShadowOpacity})`}
+                          opacity={PHASE_SKY_SHADOW_OPACITY[stripe.phase]}
                         />
                       ) : null}
                     </g>
                   );
                 })}
-                <rect
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={HORIZON_Y}
-                  fill={`rgba(226,232,240,${weatherAtmosphereOpacity})`}
-                />
-                <rect
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={HORIZON_Y}
-                  fill={`rgba(2,6,23,${skyShadowOpacity})`}
-                />
                 <rect
                   x="0"
                   y={HORIZON_Y}

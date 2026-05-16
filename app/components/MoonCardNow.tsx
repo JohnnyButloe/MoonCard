@@ -9,7 +9,6 @@ import {
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import {
-  DASHBOARD_META_FOOTER_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
@@ -17,9 +16,7 @@ import {
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
-  formatLocalTime,
   formatTimeOrDateTime,
-  weatherLabel,
 } from "./moonDashboardShared";
 
 function formatPercent(value: number | null): string {
@@ -188,8 +185,6 @@ export default function MoonNowCard({
 
   const summary = summaryQ.data;
   const moon = summary.moon;
-  const weatherCondition = weatherQ.data?.condition;
-  const weatherCloudCover = weatherQ.data?.cloudCoverPct;
   const missingPrimaryFieldCount = [
     moon.phase_name,
     moon.illumination_percent,
@@ -215,10 +210,6 @@ export default function MoonNowCard({
               message: "Some lunar details are unavailable right now.",
             }
           : null;
-  const lastUpdatedLabel =
-    summaryQ.dataUpdatedAt > 0
-      ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
-      : "—";
   const visibilityState =
     moon.is_up === true
       ? {
@@ -248,19 +239,6 @@ export default function MoonNowCard({
     moonset: moon.moonset,
     tz,
   });
-  const weatherSummary = weatherCondition
-    ? `Weather ${weatherLabel(weatherCondition)}${
-        typeof weatherCloudCover === "number"
-          ? ` · ${Math.round(weatherCloudCover)}% cloud`
-          : ""
-      }`
-    : weatherQ.error && weatherQ.data
-      ? "Weather cached"
-      : weatherQ.error
-        ? "Weather unavailable"
-        : weatherQ.isLoading
-          ? "Loading weather"
-          : "Weather live";
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
       <header className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
@@ -382,15 +360,6 @@ export default function MoonNowCard({
           <div className="mt-1 text-[11px] text-slate-300/66">{visibilityState.detail}</div>
         </div>
       </section>
-
-      <footer className={DASHBOARD_META_FOOTER_CLASS}>
-        <div>{weatherSummary}</div>
-        <div>Source: {summary.meta.calculation_source}</div>
-        <div>
-          Updated {lastUpdatedLabel}
-          {summaryQ.isFetching ? " · updating" : ""}
-        </div>
-      </footer>
     </div>
   );
 }

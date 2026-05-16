@@ -9,7 +9,6 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import {
-  DASHBOARD_META_FOOTER_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
@@ -23,29 +22,11 @@ import {
   weatherLabel,
 } from "./moonDashboardShared";
 
-function sourceLabel(source: LocationSource): string {
-  switch (source) {
-    case "current":
-      return "Current";
-    case "home":
-      return "Home";
-    case "saved":
-      return "Saved";
-    default:
-      return "Default";
-  }
-}
-
-function formatCoordinate(value: number): string {
-  return `${value >= 0 ? "+" : ""}${value.toFixed(3)}°`;
-}
-
 export default function MoonContextCard({
   lat,
   lon,
   tz,
   label,
-  source,
   onEditLocation,
 }: {
   lat: number;
@@ -150,11 +131,6 @@ export default function MoonContextCard({
       : summaryQ.data?.visibility.is_dark_enough_for_viewing === false
         ? "Bright sky"
         : "Viewing unknown";
-  const updatedLabel =
-    summaryQ.dataUpdatedAt > 0
-      ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
-      : "—";
-
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
       <header className={DASHBOARD_PANEL_HEADER_CLASS}>
@@ -223,13 +199,6 @@ export default function MoonContextCard({
           </div>
         </div>
       </section>
-
-      <footer className={DASHBOARD_META_FOOTER_CLASS}>
-        <div>Snapshot updated {updatedLabel}</div>
-        <div>
-          {summaryQ.isFetching || weatherQ.isFetching ? "Syncing live data" : "Live context"}
-        </div>
-      </footer>
     </div>
   );
 }
