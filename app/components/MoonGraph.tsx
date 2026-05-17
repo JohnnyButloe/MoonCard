@@ -19,6 +19,7 @@ import {
   DASHBOARD_PANEL_TITLE_CLASS,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
+import nightStars from "../../public/sky/night-starfield.jpg";
 
 const VIEW_W = 160;
 const VIEW_H = 36;
@@ -112,7 +113,7 @@ const PHASE_SKY_SHADOW_OPACITY: Record<TwilightPhase, number> = {
   dark: 0,
 };
 
-const NIGHT_SKY_IMAGE_URL = "/sky/night-starfield.svg";
+const NIGHT_SKY_IMAGE_URL = nightStars.src;
 
 const WEATHER_SKY_IMAGE_URL: Record<WeatherCondition, string> = {
   clear:
@@ -121,14 +122,11 @@ const WEATHER_SKY_IMAGE_URL: Record<WeatherCondition, string> = {
     "https://commons.wikimedia.org/wiki/Special:Redirect/file/Above_the_Clouds.jpg",
   overcast:
     "https://commons.wikimedia.org/wiki/Special:Redirect/file/Cloudy_sky_%2826171935906%29.jpg",
-  rain:
-    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Storm_clouds.jpg",
-  snow:
-    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Snowy_Polish_countryside_February_2015.jpg",
+  rain: "https://commons.wikimedia.org/wiki/Special:Redirect/file/Storm_clouds.jpg",
+  snow: "https://commons.wikimedia.org/wiki/Special:Redirect/file/Snowy_Polish_countryside_February_2015.jpg",
   storm:
     "https://commons.wikimedia.org/wiki/Special:Redirect/file/Storm_clouds.jpg",
-  fog:
-    "https://commons.wikimedia.org/wiki/Special:Redirect/file/Cloudy_sky_%2826171935906%29.jpg",
+  fog: "https://commons.wikimedia.org/wiki/Special:Redirect/file/Cloudy_sky_%2826171935906%29.jpg",
 };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -249,8 +247,14 @@ function buildTwilightBands(input: {
         segment.endMs > segment.startMs,
     )
     .map((segment) => ({
-      startMs: Math.max(input.dayStartMs, Math.min(input.dayEndMs, segment.startMs)),
-      endMs: Math.max(input.dayStartMs, Math.min(input.dayEndMs, segment.endMs)),
+      startMs: Math.max(
+        input.dayStartMs,
+        Math.min(input.dayEndMs, segment.startMs),
+      ),
+      endMs: Math.max(
+        input.dayStartMs,
+        Math.min(input.dayEndMs, segment.endMs),
+      ),
       phase: segment.phase,
     }))
     .filter((segment) => segment.endMs > segment.startMs)
@@ -295,7 +299,10 @@ export function buildCyclePosition(input: {
   isUp: boolean | null;
 }): number {
   const daySpan = Math.max(1, input.dayEndMs - input.dayStartMs);
-  const nowClamped = Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.nowMs));
+  const nowClamped = Math.max(
+    input.dayStartMs,
+    Math.min(input.dayEndMs, input.nowMs),
+  );
   const fallback = clamp01((nowClamped - input.dayStartMs) / daySpan);
 
   const riseMs =
@@ -309,26 +316,41 @@ export function buildCyclePosition(input: {
 
   if (riseMs !== null && setMs !== null && setMs > riseMs) {
     if (nowClamped <= riseMs) {
-      return clamp01((nowClamped - input.dayStartMs) / Math.max(1, riseMs - input.dayStartMs)) * 0.25;
+      return (
+        clamp01(
+          (nowClamped - input.dayStartMs) /
+            Math.max(1, riseMs - input.dayStartMs),
+        ) * 0.25
+      );
     }
 
     if (nowClamped <= setMs) {
       return 0.25 + ((nowClamped - riseMs) / Math.max(1, setMs - riseMs)) * 0.5;
     }
 
-    return 0.75 + ((nowClamped - setMs) / Math.max(1, input.dayEndMs - setMs)) * 0.25;
+    return (
+      0.75 + ((nowClamped - setMs) / Math.max(1, input.dayEndMs - setMs)) * 0.25
+    );
   }
 
   if (riseMs !== null && setMs !== null && riseMs > setMs) {
     if (nowClamped <= setMs) {
-      return 0.5 + ((nowClamped - input.dayStartMs) / Math.max(1, setMs - input.dayStartMs)) * 0.25;
+      return (
+        0.5 +
+        ((nowClamped - input.dayStartMs) /
+          Math.max(1, setMs - input.dayStartMs)) *
+          0.25
+      );
     }
 
     if (nowClamped < riseMs) {
       return 0.75 + ((nowClamped - setMs) / Math.max(1, riseMs - setMs)) * 0.5;
     }
 
-    return 0.25 + ((nowClamped - riseMs) / Math.max(1, input.dayEndMs - riseMs)) * 0.25;
+    return (
+      0.25 +
+      ((nowClamped - riseMs) / Math.max(1, input.dayEndMs - riseMs)) * 0.25
+    );
   }
 
   if (input.isUp === true) {
@@ -444,27 +466,30 @@ export default function MoonAltitudeGraph({
     summary.twilight.segments.length === 0 ||
     summary.sun.sunrise === null ||
     summary.sun.sunset === null;
-  const timelineStatus =
-    summaryQ.error
+  const timelineStatus = summaryQ.error
+    ? {
+        tone: "warning" as const,
+        message: "Timeline refresh failed. Showing the last update.",
+      }
+    : hasCanonicalSummaryIssues
       ? {
           tone: "warning" as const,
-          message: "Timeline refresh failed. Showing the last update.",
+          message:
+            "Astronomy data is degraded. Some timeline moments may be limited.",
         }
-      : hasCanonicalSummaryIssues
+      : hasPartialTimeline
         ? {
-            tone: "warning" as const,
-            message: "Astronomy data is degraded. Some timeline moments may be limited.",
+            tone: "neutral" as const,
+            message: "Timeline is using partial astronomy data.",
           }
-        : hasPartialTimeline
-          ? {
-              tone: "neutral" as const,
-              message: "Timeline is using partial astronomy data.",
-            }
-          : null;
+        : null;
 
   const localDate = summary.meta.requested_datetime.date;
   const dayStartMs = fromZonedTime(`${localDate}T00:00:00`, tz).getTime();
-  const dayEndMs = fromZonedTime(`${nextDateIso(localDate)}T00:00:00`, tz).getTime();
+  const dayEndMs = fromZonedTime(
+    `${nextDateIso(localDate)}T00:00:00`,
+    tz,
+  ).getTime();
 
   const twilightPhase = normalizeTwilightPhase(summary.twilight.current_phase);
   const twilightLabel = TWILIGHT_LABEL[twilightPhase];
@@ -640,30 +665,64 @@ export default function MoonAltitudeGraph({
           >
             <defs>
               <clipPath id={plotClipId}>
-                <rect x="0" y="0" width={VIEW_W} height={VIEW_H} rx="2.5" ry="2.5" />
+                <rect
+                  x="0"
+                  y="0"
+                  width={VIEW_W}
+                  height={VIEW_H}
+                  rx="2.5"
+                  ry="2.5"
+                />
               </clipPath>
 
-              <filter id={sunAuraBlurId} x="-50%" y="-50%" width="200%" height="200%">
+              <filter
+                id={sunAuraBlurId}
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
                 <feGaussianBlur stdDeviation="10" />
               </filter>
 
-              <filter id={moonAuraBlurId} x="-50%" y="-50%" width="200%" height="200%">
+              <filter
+                id={moonAuraBlurId}
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
                 <feGaussianBlur stdDeviation="9" />
               </filter>
 
               {skyStripes.map((stripe, idx) => (
-                <clipPath key={`${idPrefix}-sky-stripe-${idx}`} id={`${idPrefix}-sky-stripe-${idx}`}>
-                  <rect x={stripe.x} y="0" width={stripe.width} height={HORIZON_Y} />
+                <clipPath
+                  key={`${idPrefix}-sky-stripe-${idx}`}
+                  id={`${idPrefix}-sky-stripe-${idx}`}
+                >
+                  <rect
+                    x={stripe.x}
+                    y="0"
+                    width={stripe.width}
+                    height={HORIZON_Y}
+                  />
                 </clipPath>
               ))}
             </defs>
 
             <g clipPath={`url(#${plotClipId})`}>
               <g id="bg">
-                <rect x="0" y="0" width={VIEW_W} height={HORIZON_Y} fill="#020617" />
+                <rect
+                  x="0"
+                  y="0"
+                  width={VIEW_W}
+                  height={HORIZON_Y}
+                  fill="#020617"
+                />
                 {skyStripes.map((stripe, idx) => {
                   const weatherOpacity =
-                    PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] * weatherSkyStrength;
+                    PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] *
+                    weatherSkyStrength;
                   const nightOpacity =
                     PHASE_NIGHT_IMAGE_OPACITY[stripe.phase] * nightSkyStrength;
 
@@ -771,11 +830,21 @@ export default function MoonAltitudeGraph({
               </g>
 
               <g filter={`url(#${sunAuraBlurId})`}>
-                <circle cx={sunDotX} cy={sunDotY} r="12" fill="rgba(255,220,120,0.32)" />
+                <circle
+                  cx={sunDotX}
+                  cy={sunDotY}
+                  r="12"
+                  fill="rgba(255,220,120,0.32)"
+                />
               </g>
 
               <g filter={`url(#${moonAuraBlurId})`}>
-                <circle cx={moonDotX} cy={moonDotY} r="12" fill="rgba(180,210,255,0.24)" />
+                <circle
+                  cx={moonDotX}
+                  cy={moonDotY}
+                  r="12"
+                  fill="rgba(180,210,255,0.24)"
+                />
               </g>
 
               <g id="markers">
@@ -785,7 +854,9 @@ export default function MoonAltitudeGraph({
                   cy={moonDotY}
                   r={2.1}
                   size={15}
-                  illuminationFrac={summary.moon.illumination_fraction ?? undefined}
+                  illuminationFrac={
+                    summary.moon.illumination_fraction ?? undefined
+                  }
                   phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
                   variant="photo"
                 />
