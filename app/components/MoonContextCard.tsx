@@ -9,13 +9,17 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import {
+  DASHBOARD_BADGE_CLASS,
+  DASHBOARD_ICON_BADGE_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_HEADER_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
+  DASHBOARD_VALUE_CLASS,
   WeatherCloudSymbol,
   formatLocalDate,
   formatLocalTime,
@@ -28,6 +32,7 @@ export default function MoonContextCard({
   tz,
   label,
   onEditLocation,
+  variant = "default",
 }: {
   lat: number;
   lon: number;
@@ -35,9 +40,11 @@ export default function MoonContextCard({
   label: string;
   source: LocationSource;
   onEditLocation?: () => void;
+  variant?: "default" | "compact";
 }) {
   const summaryQ = useMoonCard(lat, lon, tz, { label });
   const weatherQ = useWeatherNow(lat, lon);
+  const isCompact = variant === "compact";
 
   if (summaryQ.error && !summaryQ.data && weatherQ.error && !weatherQ.data) {
     return (
@@ -45,13 +52,13 @@ export default function MoonContextCard({
         title="Context unavailable"
         body="Location context and conditions could not be loaded."
         tone="danger"
-        minHeightClass="min-h-[18rem]"
+        minHeightClass={isCompact ? "min-h-[14rem] lg:min-h-[15rem]" : "min-h-[18rem]"}
       >
         {onEditLocation ? (
           <button
             type="button"
             onClick={onEditLocation}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+            className={`${DASHBOARD_BADGE_CLASS} px-3 py-1.5 text-xs transition hover:border-white/20 hover:bg-white/[0.06]`}
           >
             Edit location
           </button>
@@ -61,6 +68,44 @@ export default function MoonContextCard({
   }
 
   if (!summaryQ.data && !weatherQ.data) {
+    if (isCompact) {
+      return (
+        <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 lg:min-h-[15rem]`}>
+          <div className={DASHBOARD_PANEL_HEADER_CLASS}>
+            <div className="space-y-2">
+              <DashboardSkeletonBlock className="h-2 w-20 rounded-full" />
+              <DashboardSkeletonBlock className="h-4 w-32" />
+            </div>
+            <DashboardSkeletonBlock className="h-8 w-16 rounded-full" />
+          </div>
+
+          <DashboardSkeletonBlock className="h-[5.8rem] rounded-[1.1rem]" />
+
+          <div className={`${DASHBOARD_SURFACE_CLASS} space-y-3 py-3`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                <DashboardSkeletonBlock className="h-2 w-16 rounded-full" />
+                <DashboardSkeletonBlock className="h-4 w-24" />
+                <DashboardSkeletonBlock className="h-3 w-32 rounded-full" />
+              </div>
+              <DashboardSkeletonBlock className="h-10 w-10 rounded-full" />
+            </div>
+
+            <div className="grid gap-3 border-t border-white/7 pt-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="space-y-2">
+                <DashboardSkeletonBlock className="h-2 w-14 rounded-full" />
+                <DashboardSkeletonBlock className="h-4 w-24" />
+              </div>
+              <div className="space-y-2 sm:text-right">
+                <DashboardSkeletonBlock className="ml-auto h-2 w-14 rounded-full" />
+                <DashboardSkeletonBlock className="ml-auto h-4 w-28" />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
         <div className={DASHBOARD_PANEL_HEADER_CLASS}>
@@ -131,6 +176,72 @@ export default function MoonContextCard({
       : summaryQ.data?.visibility.is_dark_enough_for_viewing === false
         ? "Bright sky"
         : "Viewing unknown";
+
+  if (isCompact) {
+    return (
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 lg:min-h-[15rem]`}>
+        <header className={DASHBOARD_PANEL_HEADER_CLASS}>
+          <div className="min-w-0">
+            <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Context</p>
+            <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Viewing conditions</h2>
+          </div>
+          {onEditLocation ? (
+            <button
+              type="button"
+              onClick={onEditLocation}
+              className={`${DASHBOARD_BADGE_CLASS} shrink-0 transition hover:border-white/20 hover:bg-white/[0.06]`}
+            >
+              Edit
+            </button>
+          ) : null}
+        </header>
+
+        {summaryStatus ? (
+          <DashboardStatusBanner tone={summaryStatus.tone}>
+            {summaryStatus.message}
+          </DashboardStatusBanner>
+        ) : null}
+
+        {weatherStatus ? (
+          <DashboardStatusBanner tone={weatherStatus.tone}>
+            {weatherStatus.message}
+          </DashboardStatusBanner>
+        ) : null}
+
+        <section className={`${DASHBOARD_SURFACE_CLASS} flex flex-1 flex-col gap-3 py-3`}>
+          <div>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing</div>
+            <div className="mt-1 text-base font-semibold text-slate-50">
+              {viewingLabel}
+            </div>
+            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
+          </div>
+
+          <div className="grid gap-3 border-t border-white/7 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 h-10 w-10 shrink-0`}>
+                <WeatherCloudSymbol condition={weatherCondition} size={24} />
+              </div>
+              <div className="min-w-0">
+                <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
+                <div className={DASHBOARD_VALUE_CLASS}>{weatherTitle}</div>
+                <div className={`mt-1 ${DASHBOARD_MUTED_TEXT_CLASS}`}>{weatherDetail}</div>
+              </div>
+            </div>
+
+            <div className="min-w-0 sm:text-right">
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local snapshot</div>
+              <div className={DASHBOARD_VALUE_CLASS}>{formatLocalTime(timestampIso, tz)}</div>
+              <div className={`mt-1 ${DASHBOARD_MUTED_TEXT_CLASS}`}>
+                {formatLocalDate(timestampIso, tz)}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
       <header className={DASHBOARD_PANEL_HEADER_CLASS}>
@@ -142,7 +253,7 @@ export default function MoonContextCard({
           <button
             type="button"
             onClick={onEditLocation}
-            className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+            className={`${DASHBOARD_BADGE_CLASS} shrink-0 transition hover:border-white/20 hover:bg-white/[0.06]`}
           >
             Edit
           </button>
@@ -172,14 +283,14 @@ export default function MoonContextCard({
       <section className="grid grid-cols-2 gap-2">
         <div className={DASHBOARD_SURFACE_CLASS}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local date</div>
-          <div className="mt-1 text-sm font-semibold text-slate-100">
+          <div className={DASHBOARD_VALUE_CLASS}>
             {formatLocalDate(timestampIso, tz)}
           </div>
         </div>
 
         <div className={DASHBOARD_SURFACE_CLASS}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local time</div>
-          <div className="mt-1 text-sm font-semibold text-slate-100">
+          <div className={DASHBOARD_VALUE_CLASS}>
             {formatLocalTime(timestampIso, tz)}
           </div>
         </div>
@@ -187,15 +298,15 @@ export default function MoonContextCard({
 
       <section className={DASHBOARD_SURFACE_CLASS}>
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 shrink-0 rounded-full border border-white/10 bg-slate-950/55 p-2">
+          <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 shrink-0`}>
             <WeatherCloudSymbol condition={weatherCondition} size={26} />
           </div>
           <div className="min-w-0">
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
-            <div className="mt-1 text-sm font-semibold text-slate-50">
+            <div className={DASHBOARD_VALUE_CLASS}>
               {weatherTitle}
             </div>
-            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{weatherDetail}</div>
+            <div className={`mt-1 ${DASHBOARD_MUTED_TEXT_CLASS}`}>{weatherDetail}</div>
           </div>
         </div>
       </section>

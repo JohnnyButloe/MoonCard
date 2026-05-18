@@ -11,14 +11,16 @@ import {
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import {
+  DASHBOARD_BADGE_MUTED_CLASS,
+  DASHBOARD_ICON_BADGE_CLASS,
   DASHBOARD_META_FOOTER_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_HEADER_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
-  DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
+  DASHBOARD_VALUE_CLASS,
 } from "./moonDashboardShared";
 
 const WINDOW_DAYS = 35;
@@ -148,7 +150,7 @@ export default function MoonCalendarPreview({
               key={`${phase.key}-${phase.instant_utc}`}
               className={`${DASHBOARD_SURFACE_CLASS} flex items-start gap-3`}
             >
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/60">
+              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 shrink-0`}>
                 <MoonPhaseCircle
                   size={18}
                   illuminationFrac={phase.illumination_frac}
@@ -159,9 +161,9 @@ export default function MoonCalendarPreview({
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <div className="text-sm font-semibold text-slate-50">{phase.label}</div>
+                  <div className={DASHBOARD_VALUE_CLASS}>{phase.label}</div>
                   {phase.isToday ? (
-                    <span className="rounded-full border border-sky-300/18 bg-sky-300/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-sky-100/78">
+                    <span className={`${DASHBOARD_BADGE_MUTED_CLASS} border-sky-300/18 bg-sky-300/10 py-0.5 text-sky-100/78`}>
                       Today
                     </span>
                   ) : null}

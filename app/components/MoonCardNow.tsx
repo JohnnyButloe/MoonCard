@@ -1,7 +1,6 @@
 "use client";
 
 import { useMoonCard } from "../hooks/useAstronomy";
-import { useWeatherNow } from "../hooks/useWeather";
 import {
   DashboardPanelState,
   DashboardSkeletonBlock,
@@ -9,13 +8,18 @@ import {
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import {
+  DASHBOARD_HERO_SURFACE_CLASS,
+  DASHBOARD_METRIC_TILE_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_HEADER_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
+  DASHBOARD_VALUE_CLASS,
+  DASHBOARD_VALUE_LARGE_CLASS,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 
@@ -140,7 +144,6 @@ export default function MoonNowCard({
   label?: string | null;
 }) {
   const summaryQ = useMoonCard(lat, lon, tz, { label });
-  const weatherQ = useWeatherNow(lat, lon);
 
   if (summaryQ.error && !summaryQ.data) {
     return (
@@ -257,7 +260,7 @@ export default function MoonNowCard({
       ) : null}
 
       <section className="grid gap-2.5 lg:grid-cols-[minmax(0,1.15fr)_minmax(14rem,0.85fr)]">
-        <div className="rounded-[1.1rem] border border-sky-200/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),_rgba(15,23,42,0.58)_40%,_rgba(2,6,23,0.92)_100%)] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className={DASHBOARD_HERO_SURFACE_CLASS}>
           <div className="flex min-h-[9.25rem] items-stretch gap-4">
             <div className="flex aspect-square self-stretch shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] bg-slate-950/35">
               <MoonPhaseCircle
@@ -271,7 +274,7 @@ export default function MoonNowCard({
 
             <div className="flex min-w-0 flex-1 flex-col justify-center">
               <div className={DASHBOARD_METRIC_LABEL_CLASS}>Current phase</div>
-              <div className="mt-1 text-[1.45rem] font-semibold leading-tight text-slate-50 sm:text-[1.6rem]">
+              <div className={DASHBOARD_VALUE_LARGE_CLASS}>
                 {moon.phase_name ?? "—"}
               </div>
               <div className="mt-1.5 text-sm text-slate-200/84">
@@ -286,7 +289,7 @@ export default function MoonNowCard({
                 >
                   {visibilityState.badge}
                 </span>
-                <span className="text-[11px] text-slate-300/70">
+                <span className={DASHBOARD_MUTED_TEXT_CLASS}>
                   {visibilityState.detail}
                 </span>
               </div>
@@ -295,10 +298,10 @@ export default function MoonNowCard({
         </div>
 
         <div
-          className={`rounded-[1.1rem] border px-3.5 py-3 ${keyEvent.className}`}
+          className={`${DASHBOARD_SURFACE_CLASS} border ${keyEvent.className}`}
         >
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>{keyEvent.heading}</div>
-          <div className="mt-1 text-sm font-semibold text-slate-50">
+          <div className={DASHBOARD_VALUE_CLASS}>
             {keyEvent.label}
           </div>
           <div className="mt-2 text-[1.2rem] font-semibold leading-tight text-slate-50">
@@ -309,23 +312,23 @@ export default function MoonNowCard({
       </section>
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[4.75rem] flex-col justify-between px-3 py-2.5`}>
+        <div className={`${DASHBOARD_METRIC_TILE_CLASS} flex min-h-[4.75rem] flex-col justify-between`}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Illumination</div>
           <div className="mt-1 text-[1.2rem] font-semibold leading-none text-slate-50">
             {formatPercent(moon.illumination_percent)}
           </div>
-          <div className="mt-1 text-[11px] text-slate-300/66">Moonlight</div>
+          <div className={DASHBOARD_MUTED_TEXT_CLASS}>Moonlight</div>
         </div>
 
         <div
-          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[4.75rem] px-3 py-2.5`}
+          className={`relative ${DASHBOARD_METRIC_TILE_CLASS} min-h-[4.75rem]`}
         >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Altitude</div>
             <div className="mt-1 text-[1.08rem] font-semibold leading-tight text-slate-50">
               {formatDegrees(moon.altitude_deg)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-300/66">
+            <div className={DASHBOARD_MUTED_TEXT_CLASS}>
               Relative to horizon
             </div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
@@ -336,14 +339,14 @@ export default function MoonNowCard({
         </div>
 
         <div
-          className={`relative ${DASHBOARD_SURFACE_CLASS} min-h-[4.75rem] px-3 py-2.5`}
+          className={`relative ${DASHBOARD_METRIC_TILE_CLASS} min-h-[4.75rem]`}
         >
           <div className="group/metric inline-flex w-full flex-col" tabIndex={0}>
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Azimuth</div>
             <div className="mt-1 text-[0.96rem] font-semibold leading-snug text-slate-50">
               {formatAzimuthWithDirection(moon.azimuth_deg)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-300/66">Compass bearing</div>
+            <div className={DASHBOARD_MUTED_TEXT_CLASS}>Compass bearing</div>
             <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs text-slate-100 opacity-0 shadow-lg shadow-black/40 backdrop-blur transition group-hover/metric:opacity-100 group-focus-within/metric:opacity-100">
               Azimuth is the Moon&apos;s compass direction along the horizon,
               measured in degrees from true north (0°), moving eastward (90°),
@@ -352,12 +355,12 @@ export default function MoonNowCard({
           </div>
         </div>
 
-        <div className={`${DASHBOARD_SURFACE_CLASS} flex min-h-[4.75rem] flex-col justify-between px-3 py-2.5`}>
+        <div className={`${DASHBOARD_METRIC_TILE_CLASS} flex min-h-[4.75rem] flex-col justify-between`}>
           <div className={DASHBOARD_METRIC_LABEL_CLASS}>Visible</div>
-          <div className="mt-1 text-sm font-semibold text-slate-50">
+          <div className={DASHBOARD_VALUE_CLASS}>
             {visibilityState.label}
           </div>
-          <div className="mt-1 text-[11px] text-slate-300/66">{visibilityState.detail}</div>
+          <div className={DASHBOARD_MUTED_TEXT_CLASS}>{visibilityState.detail}</div>
         </div>
       </section>
     </div>

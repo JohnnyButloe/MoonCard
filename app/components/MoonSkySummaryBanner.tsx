@@ -202,7 +202,7 @@ export default function MoonSkySummaryBanner({
 
       <section className={`${DASHBOARD_SURFACE_CLASS} px-3.5 py-3`}>
         <div className={DASHBOARD_METRIC_LABEL_CLASS}>Today&apos;s sky conditions</div>
-        <p className="mt-2 text-[14px] font-medium leading-6 text-slate-50/96 sm:text-[15px]">
+        <p className="mt-2 text-[14px] font-medium leading-6 text-slate-50/94 sm:text-[15px]">
           {skySummary}
         </p>
       </section>

@@ -1,16 +1,23 @@
 "use client";
 
 import type { ReactNode } from "react";
+import {
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
+  DASHBOARD_PANEL_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SURFACE_CLASS,
+} from "./moonDashboardShared";
 
 type StatusTone = "neutral" | "warning" | "danger";
 
 const TONE_CLASSES: Record<StatusTone, string> = {
   neutral:
-    "border-white/10 bg-white/[0.03] text-slate-300/80",
+    "border-white/9 bg-white/[0.03] text-slate-300/80",
   warning:
-    "border-amber-300/18 bg-amber-300/8 text-amber-100/88",
+    "border-amber-300/18 bg-amber-300/10 text-amber-100/88",
   danger:
-    "border-red-300/18 bg-red-300/8 text-red-100/90",
+    "border-red-300/18 bg-red-300/10 text-red-100/90",
 };
 
 export function DashboardSkeletonBlock({
@@ -21,7 +28,7 @@ export function DashboardSkeletonBlock({
   return (
     <div
       aria-hidden="true"
-      className={`animate-pulse rounded-lg bg-white/[0.08] ${className}`.trim()}
+      className={`animate-pulse rounded-[1rem] bg-white/[0.08] ${className}`.trim()}
     />
   );
 }
@@ -38,7 +45,7 @@ export function DashboardStatusBanner({
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
-      className={`rounded-[1rem] border px-3 py-2 text-[10.5px] leading-snug ${TONE_CLASSES[tone]} ${className}`.trim()}
+      className={`rounded-[1rem] border px-3 py-2 text-[10.5px] leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] ${TONE_CLASSES[tone]} ${className}`.trim()}
     >
       {children}
     </div>
@@ -60,16 +67,18 @@ export function DashboardPanelState({
 }) {
   return (
     <div
-      className={`flex h-full w-full items-center rounded-[1.5rem] border p-4 shadow-lg shadow-black/25 ring-1 ring-white/8 backdrop-blur ${TONE_CLASSES[tone]} ${minHeightClass}`.trim()}
+      className={`${DASHBOARD_PANEL_CLASS} items-center ${minHeightClass}`.trim()}
     >
-      <div className="max-w-sm space-y-1.5">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-300/52">
+      <div
+        className={`${DASHBOARD_SURFACE_CLASS} w-full max-w-sm space-y-1.5 border ${TONE_CLASSES[tone]}`.trim()}
+      >
+        <div className={DASHBOARD_METRIC_LABEL_CLASS}>
           Dashboard
         </div>
-        <h2 className="text-sm font-semibold tracking-tight text-slate-50">
+        <h2 className={`${DASHBOARD_PANEL_TITLE_CLASS} mt-0`}>
           {title}
         </h2>
-        <p className="text-sm leading-relaxed text-slate-300/76">{body}</p>
+        <p className={`text-sm leading-relaxed ${DASHBOARD_MUTED_TEXT_CLASS}`}>{body}</p>
         {children ? <div className="pt-1">{children}</div> : null}
       </div>
     </div>

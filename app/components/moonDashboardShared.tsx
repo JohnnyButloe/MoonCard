@@ -2,8 +2,23 @@
 
 import type { WeatherCondition } from "../providers/weather";
 
+export const DASHBOARD_PAGE_CLASS =
+  "min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.09),_rgba(5,8,22,0.36)_24%,_#050816_58%,_#040712_100%)] text-slate-100";
+
+export const DASHBOARD_PAGE_SHELL_CLASS =
+  "relative mx-auto max-w-[1240px] px-4 py-3 sm:px-5 sm:py-4 xl:px-6 xl:py-5";
+
+export const DASHBOARD_SECTION_CLASS =
+  "rounded-[1.75rem] border border-white/7 bg-[linear-gradient(180deg,rgba(15,23,42,0.68),rgba(2,6,23,0.78))] p-3.5 shadow-[0_18px_40px_rgba(2,6,23,0.26)] ring-1 ring-white/6 backdrop-blur-md sm:p-4";
+
+export const DASHBOARD_SECTION_HEADER_CLASS =
+  "mb-3 border-b border-white/7 pb-2.5 sm:mb-3.5";
+
+export const DASHBOARD_SECTION_TITLE_CLASS =
+  "text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]";
+
 export const DASHBOARD_PANEL_CLASS =
-  "flex h-full w-full flex-col gap-3 rounded-[1.5rem] bg-slate-950/72 p-4 shadow-lg shadow-black/25 ring-1 ring-white/10 backdrop-blur";
+  "flex h-full w-full flex-col gap-3 rounded-[1.5rem] border border-white/7 bg-[linear-gradient(180deg,rgba(15,23,42,0.74),rgba(2,6,23,0.84))] p-4 shadow-[0_16px_34px_rgba(2,6,23,0.24)] ring-1 ring-white/6 backdrop-blur-md";
 
 export const DASHBOARD_PANEL_HEADER_CLASS =
   "flex items-start justify-between gap-3";
@@ -14,17 +29,41 @@ export const DASHBOARD_PANEL_EYEBROW_CLASS =
 export const DASHBOARD_PANEL_TITLE_CLASS =
   "mt-1 text-sm font-semibold tracking-tight text-slate-50";
 
+export const DASHBOARD_VALUE_CLASS =
+  "mt-1 text-sm font-semibold text-slate-100";
+
+export const DASHBOARD_VALUE_LARGE_CLASS =
+  "mt-1 text-[1.45rem] font-semibold leading-tight text-slate-50 sm:text-[1.6rem]";
+
 export const DASHBOARD_SURFACE_CLASS =
-  "rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-3.5 py-3";
+  "rounded-[1.1rem] bg-white/[0.035] px-3.5 py-3 ring-1 ring-inset ring-white/7";
+
+export const DASHBOARD_HERO_SURFACE_CLASS =
+  "rounded-[1.2rem] bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.12),_rgba(15,23,42,0.6)_42%,_rgba(2,6,23,0.88)_100%)] px-3.5 py-3.5 ring-1 ring-inset ring-sky-200/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+
+export const DASHBOARD_METRIC_TILE_CLASS =
+  "rounded-[1rem] bg-white/[0.028] px-3 py-2.5 ring-1 ring-inset ring-white/7";
 
 export const DASHBOARD_METRIC_LABEL_CLASS =
   "text-[10px] uppercase tracking-[0.18em] text-slate-300/60";
 
+export const DASHBOARD_MUTED_TEXT_CLASS =
+  "text-[11px] text-slate-300/66";
+
 export const DASHBOARD_SUPPORT_TEXT_CLASS =
   "mt-1 text-[11px] leading-relaxed text-slate-300/70";
 
+export const DASHBOARD_BADGE_CLASS =
+  "inline-flex items-center rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-100";
+
+export const DASHBOARD_BADGE_MUTED_CLASS =
+  "inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-200/78";
+
+export const DASHBOARD_ICON_BADGE_CLASS =
+  "flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/48 ring-1 ring-inset ring-white/8";
+
 export const DASHBOARD_META_FOOTER_CLASS =
-  "mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/8 pt-2.5 text-[10px] text-slate-400/68";
+  "mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/7 pt-2.5 text-[10px] text-slate-400/68";
 
 export function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";

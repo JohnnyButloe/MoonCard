@@ -8,12 +8,14 @@ import {
 } from "./DashboardState";
 import {
   DASHBOARD_META_FOOTER_CLASS,
+  DASHBOARD_METRIC_TILE_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
+  DASHBOARD_VALUE_CLASS,
   formatLocalTime,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
@@ -134,10 +136,10 @@ export default function MoonSupportingDetails({
         {events.map((event) => (
           <div
             key={event.label}
-            className={`${DASHBOARD_SURFACE_CLASS} min-h-[5.4rem] px-3 py-2.5`}
+            className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5.4rem]`}
           >
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>{event.label}</div>
-            <div className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">
+            <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
               {event.value}
             </div>
           </div>

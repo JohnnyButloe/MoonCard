@@ -14,9 +14,14 @@ import {
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import { SunDisc } from "./SunDisc";
 import {
+  DASHBOARD_BADGE_MUTED_CLASS,
+  DASHBOARD_METRIC_TILE_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
+  DASHBOARD_SURFACE_CLASS,
+  DASHBOARD_VALUE_CLASS,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 import nightStars from "../../public/sky/night-starfield.jpg";
@@ -581,9 +586,6 @@ export default function MoonAltitudeGraph({
   const sunsetLegendLabel = summary.sun.sunset
     ? formatInTimeZone(new Date(summary.sun.sunset), tz, "h:mm a")
     : "—";
-  const moonriseLegendLabel = summary.moon.moonrise
-    ? formatInTimeZone(new Date(summary.moon.moonrise), tz, "h:mm a")
-    : "—";
   const moonsetLegendLabel = summary.moon.moonset
     ? formatInTimeZone(new Date(summary.moon.moonset), tz, "h:mm a")
     : "—";
@@ -635,7 +637,7 @@ export default function MoonAltitudeGraph({
           <h2 className={`${DASHBOARD_PANEL_TITLE_CLASS} mt-0`}>
             Moon/Sun altitude
           </h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sky-100/70">
+          <span className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5 px-2`}>
             <span
               className="h-1.5 w-1.5 rounded-full ring-1 ring-white/20"
               style={{ backgroundColor: TWILIGHT_BAND_COLOR[twilightPhase] }}
@@ -643,7 +645,7 @@ export default function MoonAltitudeGraph({
             Twilight {twilightLabel}
           </span>
         </div>
-        <div className="whitespace-nowrap text-[10px] text-slate-400/66">
+        <div className={`whitespace-nowrap ${DASHBOARD_MUTED_TEXT_CLASS}`}>
           Updated {lastUpdatedLabel}
           {summaryQ.isFetching ? " · updating" : ""}
         </div>
@@ -655,7 +657,7 @@ export default function MoonAltitudeGraph({
         </DashboardStatusBanner>
       ) : null}
 
-      <div className="overflow-hidden rounded-[1rem] border border-white/10 bg-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className={`${DASHBOARD_SURFACE_CLASS} overflow-hidden bg-black/50 px-0 py-0`}>
         <div className="aspect-[5/1.24] w-full">
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -867,12 +869,12 @@ export default function MoonAltitudeGraph({
         </div>
       </div>
 
-      <div className="border-t border-white/8 pt-2.5">
+      <div className="border-t border-white/7 pt-2.5">
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/68">
           {TWILIGHT_LEGEND_ORDER.map((phase) => (
             <span
               key={phase}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1"
+              className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5`}
             >
               <span
                 className="h-2 w-2 rounded-sm ring-1 ring-white/15"
@@ -892,10 +894,10 @@ export default function MoonAltitudeGraph({
           {compactContextItems.map((item) => (
             <div
               key={item.label}
-              className="rounded-[0.95rem] border border-white/8 bg-white/[0.025] px-2.5 py-2"
+              className={DASHBOARD_METRIC_TILE_CLASS}
             >
               <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
-              <div className="mt-1 text-sm font-semibold leading-tight text-slate-100">
+              <div className={`${DASHBOARD_VALUE_CLASS} leading-tight`}>
                 {item.value}
               </div>
               <div className="mt-1 text-[10px] leading-relaxed text-slate-300/62">

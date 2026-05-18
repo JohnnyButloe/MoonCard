@@ -3,16 +3,23 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import MoonNowCard from "./MoonCardNow";
-import MoonSkySummaryBanner from "./MoonSkySummaryBanner";
 import MoonContextCard from "./MoonContextCard";
 import LocationTag from "./LocationTag";
 import MoonAltitudeGraph from "./MoonGraph";
 import MoonCalendarPreview from "./MoonCalendarPreview";
+import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import MoonPhaseCalendar from "./MoonPhaseCalendar";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
+import MoonTonightHero from "./MoonTonightHero";
 import { DashboardPanelState } from "./DashboardState";
+import {
+  DASHBOARD_BADGE_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
+  DASHBOARD_PAGE_CLASS,
+  DASHBOARD_PAGE_SHELL_CLASS,
+} from "./moonDashboardShared";
 import {
   LocationProvider,
   useLocation,
@@ -21,29 +28,16 @@ import {
 } from "../providers/LocationProvider";
 
 function DashboardSectionFrame({
-  id,
   title,
+  className = "",
   children,
 }: {
-  id: string;
-  title?: string;
+  title: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-labelledby={title ? id : undefined}
-      className="rounded-[1.7rem] border border-white/8 bg-white/[0.025] p-3 sm:p-4"
-    >
-      {title ? (
-        <div className="mb-3 border-b border-white/8 pb-2.5 sm:mb-3.5">
-          <h2
-            id={id}
-            className="text-[1.02rem] font-semibold tracking-tight text-slate-50 sm:text-[1.08rem]"
-          >
-            {title}
-          </h2>
-        </div>
-      ) : null}
+    <section aria-label={title} className={className}>
       {children}
     </section>
   );
@@ -115,29 +109,29 @@ function DashboardContent({
     tz.length > 0;
 
   return (
-    <main className="min-h-screen bg-[#050816] text-slate-100">
+    <main className={DASHBOARD_PAGE_CLASS}>
       {isLocationEditorOpen ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm"
           onClick={() => setIsLocationEditorOpen(false)}
         >
           <div
-            className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-900/95 p-5 shadow-2xl shadow-black/50"
+            className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-900/95 p-5 shadow-2xl shadow-black/50 ring-1 ring-white/8"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-100/55">
+                <p className={DASHBOARD_METRIC_LABEL_CLASS}>
                   Edit location
                 </p>
-                <h2 className="mt-1 text-xl font-semibold text-white/92">
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-white/92">
                   Change the dashboard location
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsLocationEditorOpen(false)}
-                className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300/80 transition hover:border-white/20 hover:text-white"
+                className={`${DASHBOARD_BADGE_CLASS} bg-transparent px-3 py-1 text-xs text-slate-300/80 transition hover:border-white/20 hover:text-white`}
               >
                 Close
               </button>
@@ -152,16 +146,16 @@ function DashboardContent({
                   handleUseCurrentLocation();
                   setIsLocationEditorOpen(false);
                 }}
-                className={`w-full rounded-[1.5rem] border px-4 py-3 text-left transition ${
+                className={`w-full rounded-[1.35rem] px-4 py-3 text-left ring-1 ring-inset transition ${
                   current
-                    ? "border-sky-300/30 bg-sky-300/8 text-sky-50/90 hover:border-sky-300/45 hover:bg-sky-300/12"
-                    : "cursor-not-allowed border-white/10 bg-white/3 text-slate-400/85"
+                    ? "bg-sky-300/8 text-sky-50/90 ring-sky-300/28 hover:bg-sky-300/12 hover:ring-sky-300/42"
+                    : "cursor-not-allowed bg-white/[0.03] text-slate-400/85 ring-white/8"
                 }`}
               >
-                <span className="block text-[11px] uppercase tracking-[0.24em] text-sky-100/55">
+                <span className={DASHBOARD_METRIC_LABEL_CLASS}>
                   Current location
                 </span>
-                <span className="mt-1 block text-base font-medium">
+                <span className={`mt-1 block text-base font-medium ${current ? "text-inherit" : "text-slate-300/88"}`}>
                   {isLocating && !current
                     ? "Locating current position..."
                     : current?.label ?? "Current location unavailable"}
@@ -179,7 +173,7 @@ function DashboardContent({
         </div>
       ) : null}
 
-      <div className="relative mx-auto max-w-[1240px] px-4 py-3 sm:px-5 sm:py-4 xl:px-6 xl:py-5">
+      <div className={DASHBOARD_PAGE_SHELL_CLASS}>
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div
             className="absolute inset-0"
@@ -193,14 +187,31 @@ function DashboardContent({
           <div className="absolute bottom-0 left-12 h-96 w-96 rounded-full bg-slate-900/30 blur-3xl" />
         </div>
 
-        <header className="mb-4 flex flex-wrap items-start justify-between gap-4 sm:mb-5">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.24em] text-sky-200/54">
-              Lunar dashboard
-            </p>
-            <h1 className="mt-1 text-[1.65rem] font-semibold tracking-tight text-slate-50 sm:text-[1.82rem]">
-              Mooncard
-            </h1>
+        <header className="mb-2.5 flex flex-wrap items-center justify-between gap-3 sm:mb-3.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(125,211,252,0.22),rgba(15,23,42,0.82)_68%,rgba(2,6,23,0.96)_100%)] ring-1 ring-inset ring-sky-200/18 shadow-[0_12px_26px_rgba(56,189,248,0.12)]">
+              <MoonPhaseCircle
+                phaseAngleDeg={66}
+                size={24}
+                variant="flat"
+                className="opacity-95"
+              />
+            </div>
+
+            <div className="min-w-0 space-y-0.5">
+              <p className={DASHBOARD_METRIC_LABEL_CLASS}>
+                Lunar dashboard
+              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-50 sm:text-[1.82rem]">
+                  MoonCard
+                </h1>
+                <span className="hidden h-1 w-1 rounded-full bg-sky-300/60 sm:inline-block" />
+                <p className={`text-xs sm:text-sm ${DASHBOARD_MUTED_TEXT_CLASS}`}>
+                  Live lunar visibility planner.
+                </p>
+              </div>
+            </div>
           </div>
           {hasActiveLocation ? (
             <LocationTag
@@ -215,7 +226,7 @@ function DashboardContent({
             <button
               type="button"
               onClick={() => setIsLocationEditorOpen(true)}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+              className={`${DASHBOARD_BADGE_CLASS} px-3 py-1.5 text-xs transition hover:border-white/20 hover:bg-white/[0.06]`}
             >
               Set location
             </button>
@@ -223,65 +234,68 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <div className="space-y-4 sm:space-y-5">
-            <DashboardSectionFrame id="current-moon-heading">
-              <div className="space-y-3.5 lg:space-y-4">
-                <MoonSkySummaryBanner
+          <div className="grid gap-3.5 sm:gap-4 lg:grid-cols-12 lg:items-start">
+            <DashboardSectionFrame
+              title="Moon overview"
+              className="lg:col-span-8"
+            >
+              <section className="flex min-w-0">
+                <MoonTonightHero
                   lat={active.latitude}
                   lon={active.longitude}
                   tz={tz}
                   label={active.label}
                 />
-
-                <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
-                  <section className="flex min-w-0 lg:col-span-8">
-                    <MoonNowCard
-                      lat={active.latitude}
-                      lon={active.longitude}
-                      tz={tz}
-                      label={active.label}
-                    />
-                  </section>
-                  <section className="flex min-w-0 lg:col-span-4">
-                    <MoonContextCard
-                      lat={active.latitude}
-                      lon={active.longitude}
-                      tz={tz}
-                      label={active.label}
-                      source={active.source}
-                      onEditLocation={() => setIsLocationEditorOpen(true)}
-                    />
-                  </section>
-                </div>
-              </div>
+              </section>
             </DashboardSectionFrame>
 
             <DashboardSectionFrame
-              id="sky-timeline-heading"
-              title="Today's Sky Timeline"
+              title="Viewing conditions and weather"
+              className="flex min-w-0 lg:col-span-4"
             >
-              <div className="min-w-0">
+              <MoonContextCard
+                lat={active.latitude}
+                lon={active.longitude}
+                tz={tz}
+                label={active.label}
+                source={active.source}
+                onEditLocation={() => setIsLocationEditorOpen(true)}
+                variant="compact"
+              />
+            </DashboardSectionFrame>
+
+            <DashboardSectionFrame
+              title="Today's sky timeline"
+              className="min-w-0 lg:col-span-12"
+            >
+              <section className="flex min-w-0">
                 <MoonAltitudeGraph
                   lat={active.latitude}
                   lon={active.longitude}
                   tz={tz}
                   label={active.label}
                 />
-              </div>
+              </section>
             </DashboardSectionFrame>
 
             <DashboardSectionFrame
-              id="lunar-calendar-heading"
-              title="Lunar Calendar"
+              title="Lunar calendar"
+              className="min-w-0 lg:col-span-8"
             >
-              <div className="grid gap-3.5 lg:grid-cols-12 lg:gap-4">
-                <section className="flex min-w-0 lg:col-span-8">
-                  <MoonPhaseCalendar key={tz} tz={tz} compact />
-                </section>
-                <section className="flex min-w-0 lg:col-span-4">
-                  <MoonCalendarPreview key={`${tz}-events`} tz={tz} title="Next lunar events" />
-                </section>
-              </div>
+              <section className="flex min-w-0">
+                <MoonPhaseCalendar key={tz} tz={tz} compact />
+              </section>
+            </DashboardSectionFrame>
+
+            <DashboardSectionFrame
+              title="Next lunar events"
+              className="flex min-w-0 lg:col-span-4"
+            >
+              <MoonCalendarPreview
+                key={`${tz}-events`}
+                tz={tz}
+                title="Next lunar events"
+              />
             </DashboardSectionFrame>
           </div>
         ) : (
@@ -294,7 +308,7 @@ function DashboardContent({
               <button
                 type="button"
                 onClick={() => setIsLocationEditorOpen(true)}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+                className={`${DASHBOARD_BADGE_CLASS} px-3 py-1.5 text-xs transition hover:border-white/20 hover:bg-white/[0.06]`}
               >
                 Set location
               </button>

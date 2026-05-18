@@ -10,6 +10,12 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
+import {
+  DASHBOARD_BADGE_MUTED_CLASS,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
+  DASHBOARD_PANEL_TITLE_CLASS,
+} from "./moonDashboardShared";
 
 const WINDOW_DAYS = 35;
 
@@ -177,14 +183,14 @@ export default function MoonPhaseCalendar({
     <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2.5`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-[10px] uppercase tracking-[0.26em] text-sky-200/52">
+          <h3 className={DASHBOARD_METRIC_LABEL_CLASS}>
             Moon calendar
           </h3>
-          <p className="mt-1 text-sm font-semibold tracking-tight text-slate-50">
+          <p className={DASHBOARD_PANEL_TITLE_CLASS}>
             Major phases
           </p>
         </div>
-        <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-1.5 py-1">
+        <div className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5 px-1.5 py-1`}>
           <button
             type="button"
             onClick={() => {
@@ -201,7 +207,7 @@ export default function MoonPhaseCalendar({
           >
             &lt;
           </button>
-          <p className="min-w-[7.25rem] text-center text-[10px] uppercase tracking-[0.15em] text-slate-300/62">
+          <p className={`min-w-[7.25rem] text-center ${DASHBOARD_MUTED_TEXT_CLASS}`}>
             {rangeLabel}
           </p>
           <button
