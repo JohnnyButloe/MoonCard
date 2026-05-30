@@ -65,6 +65,27 @@ export const DASHBOARD_ICON_BADGE_CLASS =
 export const DASHBOARD_META_FOOTER_CLASS =
   "mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/7 pt-2.5 text-[10px] text-slate-400/68";
 
+export type ViewingWeatherImpact = "clear" | "limited" | "poor";
+export type ViewingAssessment = {
+  label: string;
+  summary: string;
+  weatherImpact: ViewingWeatherImpact;
+};
+
+export function formatMoonEventDetail(
+  event: "moonrise" | "high_moon" | "moonset",
+): string {
+  switch (event) {
+    case "moonrise":
+      return "Rises in the eastern sky.";
+    case "moonset":
+      return "Sets in the western sky.";
+    case "high_moon":
+    default:
+      return "Highest point in the sky.";
+  }
+}
+
 export function formatLocalTime(iso: string | undefined, tz: string): string {
   if (!iso) return "—";
 
@@ -123,6 +144,148 @@ export function weatherLabel(condition: WeatherCondition | undefined): string {
     default:
       return "Weather";
   }
+}
+
+export function getViewingWeatherImpact(
+  condition: WeatherCondition | undefined,
+  cloudCoverPct: number | undefined,
+): ViewingWeatherImpact {
+  if (condition === "storm" || condition === "snow" || condition === "overcast") {
+    return "poor";
+  }
+
+  if (typeof cloudCoverPct === "number") {
+    if (cloudCoverPct >= 90) return "poor";
+    if (cloudCoverPct >= 55) return "limited";
+  }
+
+  if (condition === "rain") {
+    return typeof cloudCoverPct === "number" && cloudCoverPct < 55
+      ? "limited"
+      : "poor";
+  }
+
+  if (condition === "fog" || condition === "partly_cloudy") {
+    return "limited";
+  }
+
+  return "clear";
+}
+
+function weatherViewingReason(
+  condition: WeatherCondition | undefined,
+  cloudCoverPct: number | undefined,
+  impact: ViewingWeatherImpact,
+): string | null {
+  switch (condition) {
+    case "overcast":
+      return "Overcast skies will likely block the moon.";
+    case "storm":
+      return "Storm conditions will likely block the moon.";
+    case "snow":
+      return "Snow clouds will likely block the moon.";
+    case "rain":
+      return impact === "poor"
+        ? "Rain clouds will likely block the moon."
+        : "Rain clouds may reduce visibility.";
+    case "fog":
+      return impact === "poor"
+        ? "Fog will likely block visibility."
+        : "Fog may reduce visibility.";
+    case "partly_cloudy":
+      return "Clouds may interrupt visibility.";
+    default:
+      break;
+  }
+
+  if (typeof cloudCoverPct === "number") {
+    if (cloudCoverPct >= 90) return "Heavy cloud cover will likely block the moon.";
+    if (cloudCoverPct >= 55) return "Cloud cover may reduce visibility.";
+  }
+
+  return null;
+}
+
+export function getViewingAssessment({
+  isDarkEnoughForViewing,
+  visibilitySummary,
+  weatherCondition,
+  weatherCloudCover,
+}: {
+  isDarkEnoughForViewing: boolean | null | undefined;
+  visibilitySummary: string | null | undefined;
+  weatherCondition: WeatherCondition | undefined;
+  weatherCloudCover: number | undefined;
+}): ViewingAssessment {
+  const weatherImpact = getViewingWeatherImpact(weatherCondition, weatherCloudCover);
+  const weatherReason = weatherViewingReason(
+    weatherCondition,
+    weatherCloudCover,
+    weatherImpact,
+  );
+
+  if (weatherImpact === "poor") {
+    if (isDarkEnoughForViewing === false) {
+      return {
+        label: "Poor viewing",
+        summary:
+          weatherReason ??
+          "The sky is bright and weather conditions will likely block the moon.",
+        weatherImpact,
+      };
+    }
+
+    return {
+      label: "Poor viewing",
+      summary:
+        weatherReason ??
+        "Weather conditions will likely block the moon despite dark skies.",
+      weatherImpact,
+    };
+  }
+
+  if (weatherImpact === "limited") {
+    if (isDarkEnoughForViewing === false) {
+      return {
+        label: "Limited viewing",
+        summary:
+          weatherReason ??
+          "The sky is bright and clouds may further reduce visibility.",
+        weatherImpact,
+      };
+    }
+
+    return {
+      label: "Limited viewing",
+      summary: weatherReason ?? "Clouds may interrupt visibility.",
+      weatherImpact,
+    };
+  }
+
+  if (isDarkEnoughForViewing === true) {
+    return {
+      label: "Good viewing",
+      summary:
+        visibilitySummary ?? "Dark sky conditions are available for viewing.",
+      weatherImpact,
+    };
+  }
+
+  if (isDarkEnoughForViewing === false) {
+    return {
+      label: "Bright sky",
+      summary:
+        visibilitySummary ?? "The sky is not dark enough for easy viewing.",
+      weatherImpact,
+    };
+  }
+
+  return {
+    label: "Viewing unknown",
+    summary:
+      visibilitySummary ?? "Viewing guidance is unavailable for this update.",
+    weatherImpact,
+  };
 }
 
 export function WeatherCloudSymbol({

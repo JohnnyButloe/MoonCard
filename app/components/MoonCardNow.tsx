@@ -20,6 +20,7 @@ import {
   DASHBOARD_SURFACE_CLASS,
   DASHBOARD_VALUE_CLASS,
   DASHBOARD_VALUE_LARGE_CLASS,
+  formatMoonEventDetail,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 
@@ -69,17 +70,17 @@ function getKeyEvent({
     {
       label: "Moonrise",
       iso: moonrise,
-      detail: "Moon clears the horizon.",
+      detail: formatMoonEventDetail("moonrise"),
     },
     {
       label: "Peak altitude",
       iso: highMoon,
-      detail: "Highest point in the sky.",
+      detail: formatMoonEventDetail("high_moon"),
     },
     {
       label: "Moonset",
       iso: moonset,
-      detail: "Moon drops below the horizon.",
+      detail: formatMoonEventDetail("moonset"),
     },
   ]
     .map((event) => ({

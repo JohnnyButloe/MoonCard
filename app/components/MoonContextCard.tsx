@@ -23,8 +23,19 @@ import {
   WeatherCloudSymbol,
   formatLocalDate,
   formatLocalTime,
+  formatTimeOrDateTime,
+  getViewingAssessment,
   weatherLabel,
 } from "./moonDashboardShared";
+
+function formatTwilightLabel(value: string | null | undefined): string {
+  if (!value) return "Unavailable";
+
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function MoonContextCard({
   lat,
@@ -52,7 +63,7 @@ export default function MoonContextCard({
         title="Context unavailable"
         body="Location context and conditions could not be loaded."
         tone="danger"
-        minHeightClass={isCompact ? "min-h-[14rem] lg:min-h-[15rem]" : "min-h-[18rem]"}
+        minHeightClass={isCompact ? "min-h-[14rem] md:min-h-[15rem]" : "min-h-[18rem]"}
       >
         {onEditLocation ? (
           <button
@@ -70,7 +81,7 @@ export default function MoonContextCard({
   if (!summaryQ.data && !weatherQ.data) {
     if (isCompact) {
       return (
-        <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 lg:min-h-[15rem]`}>
+        <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 md:min-h-[15rem]`}>
           <div className={DASHBOARD_PANEL_HEADER_CLASS}>
             <div className="space-y-2">
               <DashboardSkeletonBlock className="h-2 w-20 rounded-full" />
@@ -82,23 +93,25 @@ export default function MoonContextCard({
           <DashboardSkeletonBlock className="h-[5.8rem] rounded-[1.1rem]" />
 
           <div className={`${DASHBOARD_SURFACE_CLASS} space-y-3 py-3`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-2">
-                <DashboardSkeletonBlock className="h-2 w-16 rounded-full" />
-                <DashboardSkeletonBlock className="h-4 w-24" />
-                <DashboardSkeletonBlock className="h-3 w-32 rounded-full" />
-              </div>
-              <DashboardSkeletonBlock className="h-10 w-10 rounded-full" />
+            <div className="space-y-2">
+              <DashboardSkeletonBlock className="h-2 w-16 rounded-full" />
+              <DashboardSkeletonBlock className="h-4 w-24" />
+              <DashboardSkeletonBlock className="h-3 w-32 rounded-full" />
             </div>
 
-            <div className="grid gap-3 border-t border-white/7 pt-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="space-y-2 border-t border-white/7 pt-3">
               <div className="space-y-2">
                 <DashboardSkeletonBlock className="h-2 w-14 rounded-full" />
                 <DashboardSkeletonBlock className="h-4 w-24" />
+                <DashboardSkeletonBlock className="h-3 w-28 rounded-full" />
               </div>
-              <div className="space-y-2 sm:text-right">
-                <DashboardSkeletonBlock className="ml-auto h-2 w-14 rounded-full" />
-                <DashboardSkeletonBlock className="ml-auto h-4 w-28" />
+
+              <div className="flex items-start gap-3 border-t border-white/7 pt-3">
+                <DashboardSkeletonBlock className="h-9 w-9 rounded-full" />
+                <div className="space-y-2">
+                  <DashboardSkeletonBlock className="h-2 w-14 rounded-full" />
+                  <DashboardSkeletonBlock className="h-4 w-28" />
+                </div>
               </div>
             </div>
           </div>
@@ -167,19 +180,20 @@ export default function MoonContextCard({
           : weatherQ.isLoading
             ? "Syncing live weather"
             : "Live conditions";
-  const visibilitySummary =
-    summaryQ.data?.visibility.summary ??
-    "Viewing guidance is unavailable for this update.";
-  const viewingLabel =
-    summaryQ.data?.visibility.is_dark_enough_for_viewing === true
-      ? "Good viewing"
-      : summaryQ.data?.visibility.is_dark_enough_for_viewing === false
-        ? "Bright sky"
-        : "Viewing unknown";
+  const viewingAssessment = getViewingAssessment({
+    isDarkEnoughForViewing: summaryQ.data?.visibility.is_dark_enough_for_viewing,
+    visibilitySummary: summaryQ.data?.visibility.summary,
+    weatherCondition,
+    weatherCloudCover,
+  });
+  const twilightValue = formatTwilightLabel(summaryQ.data?.twilight.current_phase);
+  const twilightDetail = summaryQ.data?.twilight.next_transition
+    ? `Next transition ${formatTimeOrDateTime(summaryQ.data.twilight.next_transition, tz)}`
+    : "Next transition unavailable.";
 
   if (isCompact) {
     return (
-      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 lg:min-h-[15rem]`}>
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-2.5 px-3.5 py-3.5 md:min-h-[15rem]`}>
         <header className={DASHBOARD_PANEL_HEADER_CLASS}>
           <div className="min-w-0">
             <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Context</p>
@@ -208,32 +222,38 @@ export default function MoonContextCard({
           </DashboardStatusBanner>
         ) : null}
 
-        <section className={`${DASHBOARD_SURFACE_CLASS} flex flex-1 flex-col gap-3 py-3`}>
+        <section className={`${DASHBOARD_SURFACE_CLASS} flex flex-1 flex-col justify-between gap-2 px-3 py-2.5`}>
           <div>
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing</div>
             <div className="mt-1 text-base font-semibold text-slate-50">
-              {viewingLabel}
+              {viewingAssessment.label}
             </div>
-            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
+            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>
+              {viewingAssessment.summary}
+            </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/7 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 h-10 w-10 shrink-0`}>
+          <div className="grid gap-2 border-t border-white/7 pt-2">
+            <div className="min-w-0">
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight</div>
+              <div className={`${DASHBOARD_VALUE_CLASS} mt-0.5 leading-tight`}>
+                {twilightValue}
+              </div>
+              <div className={`mt-0.5 ${DASHBOARD_MUTED_TEXT_CLASS}`}>
+                {twilightDetail}
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-start gap-2.5 border-t border-white/7 pt-2">
+              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 h-9 w-9 shrink-0`}>
                 <WeatherCloudSymbol condition={weatherCondition} size={24} />
               </div>
               <div className="min-w-0">
                 <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
-                <div className={DASHBOARD_VALUE_CLASS}>{weatherTitle}</div>
-                <div className={`mt-1 ${DASHBOARD_MUTED_TEXT_CLASS}`}>{weatherDetail}</div>
-              </div>
-            </div>
-
-            <div className="min-w-0 sm:text-right">
-              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Local snapshot</div>
-              <div className={DASHBOARD_VALUE_CLASS}>{formatLocalTime(timestampIso, tz)}</div>
-              <div className={`mt-1 ${DASHBOARD_MUTED_TEXT_CLASS}`}>
-                {formatLocalDate(timestampIso, tz)}
+                <div className={DASHBOARD_VALUE_CLASS}>
+                  {weatherTitle}
+                  <span className="font-normal text-slate-300/76"> · {weatherDetail}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -275,9 +295,11 @@ export default function MoonContextCard({
       <section className={DASHBOARD_SURFACE_CLASS}>
         <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
         <div className="mt-1 text-base font-semibold text-slate-50">
-          {viewingLabel}
+          {viewingAssessment.label}
         </div>
-        <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
+        <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>
+          {viewingAssessment.summary}
+        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-2">

@@ -22,6 +22,7 @@ import {
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SURFACE_CLASS,
   DASHBOARD_VALUE_CLASS,
+  formatMoonEventDetail,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 import nightStars from "../../public/sky/night-starfield.jpg";
@@ -218,15 +219,6 @@ function formatVisibilityLabel(isUp: boolean | null | undefined): string {
   if (isUp === true) return "Above horizon";
   if (isUp === false) return "Below horizon";
   return "Horizon pending";
-}
-
-function formatTwilightLabel(value: string | null | undefined): string {
-  if (!value) return "—";
-
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function buildTwilightBands(input: {
@@ -591,14 +583,9 @@ export default function MoonAltitudeGraph({
     : "—";
   const compactContextItems = [
     {
-      label: "Twilight",
-      value: formatTwilightLabel(summary.twilight.current_phase),
-      detail: `Next transition ${formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz)}`,
-    },
-    {
-      label: "Moon altitude",
-      value: formatDegrees(summary.moon.altitude_deg),
-      detail: `${formatAzimuthWithDirection(summary.moon.azimuth_deg)} · ${formatVisibilityLabel(summary.moon.is_up)}`,
+      label: "Peak altitude",
+      value: formatTimeOrDateTime(summary.moon.high_moon ?? undefined, tz),
+      detail: formatMoonEventDetail("high_moon"),
     },
     {
       label: "Sun altitude",
@@ -608,7 +595,7 @@ export default function MoonAltitudeGraph({
     {
       label: "Moonset",
       value: moonsetLegendLabel,
-      detail: "Moon drops below the horizon.",
+      detail: formatMoonEventDetail("moonset"),
     },
     {
       label: "Sunrise",

@@ -234,12 +234,12 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <div className="grid gap-3.5 sm:gap-4 lg:grid-cols-12 lg:items-start">
+          <div className="grid gap-3.5 sm:gap-4 md:grid-cols-12 md:items-stretch">
             <DashboardSectionFrame
               title="Moon overview"
-              className="lg:col-span-8"
+              className="flex min-w-0 md:col-span-8"
             >
-              <section className="flex min-w-0">
+              <section className="flex h-full min-w-0 w-full">
                 <MoonTonightHero
                   lat={active.latitude}
                   lon={active.longitude}
@@ -251,7 +251,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Viewing conditions and weather"
-              className="flex min-w-0 lg:col-span-4"
+              className="flex min-w-0 md:col-span-4"
             >
               <MoonContextCard
                 lat={active.latitude}
@@ -266,7 +266,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Today's sky timeline"
-              className="min-w-0 lg:col-span-12"
+              className="min-w-0 md:col-span-12"
             >
               <section className="flex min-w-0">
                 <MoonAltitudeGraph
@@ -280,7 +280,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Lunar calendar"
-              className="min-w-0 lg:col-span-8"
+              className="min-w-0 md:col-span-8"
             >
               <section className="flex min-w-0">
                 <MoonPhaseCalendar key={tz} tz={tz} compact />
@@ -289,7 +289,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Next lunar events"
-              className="flex min-w-0 lg:col-span-4"
+              className="flex min-w-0 md:col-span-4"
             >
               <MoonCalendarPreview
                 key={`${tz}-events`}
