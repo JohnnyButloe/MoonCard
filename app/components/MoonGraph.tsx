@@ -27,8 +27,9 @@ const VIEW_H = 36;
 const HORIZON_Y = 21;
 const AMP = 12;
 const MOON_VISUAL_PEAK_Y = 8;
-const MOON_VISUAL_TROUGH_Y = 33;
+const MOON_VISUAL_TROUGH_Y = 32.5;
 const MOON_VISUAL_SAMPLES = 220;
+const MOON_BELOW_HORIZON_LINEAR_BLEND = 0.38;
 const MOON_PLOT_TOP_Y = 2;
 const MOON_PLOT_BOTTOM_Y = VIEW_H - 2;
 const MIN_MOON_ABOVE_ALTITUDE = 20;
@@ -401,10 +402,15 @@ export function getMoonVisualYForMs(input: {
 
     const troughDepth = MOON_VISUAL_TROUGH_Y - HORIZON_Y;
     const easedProgress = easeInOutSine(state.progress);
+    const blendedProgress = lerp(
+      easedProgress,
+      state.progress,
+      MOON_BELOW_HORIZON_LINEAR_BLEND,
+    );
     const belowShape =
       input.targetMs < riseMs
-        ? Math.sin((1 - easedProgress) * (Math.PI / 2))
-        : Math.sin(easedProgress * (Math.PI / 2));
+        ? Math.sin((1 - blendedProgress) * (Math.PI / 2))
+        : Math.sin(blendedProgress * (Math.PI / 2));
     return HORIZON_Y + belowShape * troughDepth;
   }
 
