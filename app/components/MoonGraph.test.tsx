@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -22,9 +22,11 @@ vi.mock("../hooks/useWeather", () => ({
 
 import MoonAltitudeGraph, {
   buildAltitudePlotPoints,
+  buildMoonHoverTooltipLayout,
   buildMoonVisualOrbitPath,
   buildMoonAltitudeScale,
   buildOrbitCurveY,
+  findNearestMoonSampleByMs,
   getMoonVisualYForMs,
   interpolatePlotPointAtMs,
 } from "./MoonGraph";
@@ -179,6 +181,84 @@ describe("MoonGraph", () => {
     });
   });
 
+  it("finds the nearest real Moon sample by timestamp for hover lookup", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const points = buildAltitudePlotPoints({
+      dayStartMs,
+      dayEndMs,
+      samples: [
+        {
+          time_utc: "2026-04-05T00:00:00Z",
+          altitude_deg: -18.4,
+          azimuth_deg: 91.2,
+          above_horizon: false,
+        },
+        {
+          time_utc: "2026-04-05T06:30:00Z",
+          altitude_deg: 32.4,
+          azimuth_deg: 143.2,
+          above_horizon: true,
+        },
+        {
+          time_utc: "2026-04-06T00:00:00Z",
+          altitude_deg: -27.6,
+          azimuth_deg: 287.1,
+          above_horizon: false,
+        },
+      ],
+    });
+
+    const nearest = findNearestMoonSampleByMs(
+      points,
+      Date.parse("2026-04-05T05:10:00Z"),
+    );
+
+    expect(nearest).toMatchObject({
+      ms: Date.parse("2026-04-05T06:30:00Z"),
+      altitudeDeg: 32.4,
+      azimuthDeg: 143.2,
+      aboveHorizon: true,
+    });
+  });
+
+  it("builds a bounded hover tooltip layout near the chart edges", () => {
+    expect(
+      buildMoonHoverTooltipLayout({
+        hoverX: 2,
+        hoverY: 4,
+      }),
+    ).toMatchObject({
+      horizontalAlign: "start",
+      verticalAlign: "bottom",
+    });
+    expect(
+      buildMoonHoverTooltipLayout({
+        hoverX: 2,
+        hoverY: 4,
+      }).leftPct,
+    ).toBeGreaterThanOrEqual(4);
+
+    expect(
+      buildMoonHoverTooltipLayout({
+        hoverX: 158,
+        hoverY: 30,
+      }),
+    ).toMatchObject({
+      horizontalAlign: "end",
+      verticalAlign: "top",
+    });
+    expect(
+      buildMoonHoverTooltipLayout({
+        hoverX: 80,
+        hoverY: 18,
+      }),
+    ).toMatchObject({
+      horizontalAlign: "center",
+      verticalAlign: "top",
+    });
+  });
+
   it("builds a Moon visual curve that crosses the horizon at moonrise and moonset", () => {
     const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
     const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
@@ -320,6 +400,100 @@ describe("MoonGraph", () => {
     expect(Math.abs((pathPoint?.[1] ?? 0) - expectedY)).toBeLessThan(0.1);
   });
 
+  it("shows hover tooltip data from the nearest real Moon sample while keeping the marker on the visual curve", () => {
+    const data = buildCanonicalMoonCardResponse();
+    mockUseMoonCard.mockReturnValue(
+      buildQueryResult({
+        data,
+      }),
+    );
+
+    render(<MoonAltitudeGraph lat={40.7} lon={-74} tz="UTC" />);
+
+    const svg = screen.getByTestId("moon-graph-svg");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 160,
+      bottom: 36,
+      width: 160,
+      height: 36,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.pointerMove(svg, { clientX: 1, clientY: 18 });
+
+    expect(screen.getByTestId("moon-hover-tooltip")).toBeInTheDocument();
+    expect(screen.getByTestId("moon-hover-guide")).toBeInTheDocument();
+    expect(screen.getByText("Time")).toBeInTheDocument();
+    expect(screen.getByText("12:00 AM")).toBeInTheDocument();
+    expect(screen.getByText("Moon altitude")).toBeInTheDocument();
+    expect(screen.getByText("-18°")).toBeInTheDocument();
+    expect(screen.getByText("Direction")).toBeInTheDocument();
+    expect(screen.getByText("E / 91°")).toBeInTheDocument();
+    expect(screen.getByText("Below horizon")).toBeInTheDocument();
+
+    const points = buildAltitudePlotPoints({
+      dayStartMs: Date.parse("2026-04-05T00:00:00Z"),
+      dayEndMs: Date.parse("2026-04-06T00:00:00Z"),
+      samples: data.moon.path?.samples,
+    });
+    const hoveredPoint = points[0];
+    const expectedY = getMoonVisualYForMs({
+      targetMs: hoveredPoint.ms,
+      dayStartMs: Date.parse("2026-04-05T00:00:00Z"),
+      dayEndMs: Date.parse("2026-04-06T00:00:00Z"),
+      riseMs: Date.parse(data.moon.moonrise ?? ""),
+      setMs: Date.parse(data.moon.moonset ?? ""),
+      peakMs: Date.parse(data.moon.high_moon ?? ""),
+      isUp: data.moon.is_up,
+    });
+    const hoverMarker = screen.getByTestId("moon-hover-marker");
+    const hoverMarkerY = Number(hoverMarker.getAttribute("cy"));
+
+    expect(hoverMarkerY).toBeCloseTo(expectedY, 4);
+    expect(Math.abs(hoverMarkerY - hoveredPoint.y)).toBeGreaterThan(0.5);
+
+    fireEvent.pointerLeave(svg);
+
+    expect(screen.queryByTestId("moon-hover-tooltip")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("moon-hover-marker")).not.toBeInTheDocument();
+  });
+
+  it("supports tap-style pointer interaction for showing the Moon tooltip", () => {
+    mockUseMoonCard.mockReturnValue(
+      buildQueryResult({
+        data: buildCanonicalMoonCardResponse(),
+      }),
+    );
+
+    render(<MoonAltitudeGraph lat={40.7} lon={-74} tz="UTC" />);
+
+    const svg = screen.getByTestId("moon-graph-svg");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 160,
+      bottom: 36,
+      width: 160,
+      height: 36,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.pointerDown(svg, {
+      clientX: 90,
+      clientY: 14,
+      pointerType: "touch",
+    });
+
+    expect(screen.getByTestId("moon-hover-tooltip")).toBeInTheDocument();
+    expect(screen.getByTestId("moon-hover-marker")).toBeInTheDocument();
+  });
+
   it("keeps the synthetic Sun orbit helper aligned to the horizon at rise and set", () => {
     const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
     const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
@@ -414,5 +588,37 @@ describe("MoonGraph", () => {
     expect(points[1]?.y).toBeGreaterThan(points[0]?.y);
     expect(points[1]?.y).toBeLessThan(36);
     expect(points[2]?.y).toBeLessThan(21);
+  });
+
+  it("does not show a Moon hover tooltip when real Moon samples are unavailable", () => {
+    mockUseMoonCard.mockReturnValue(
+      buildQueryResult({
+        data: buildCanonicalMoonCardResponse({
+          moon: {
+            path: null,
+          },
+        }),
+      }),
+    );
+
+    render(<MoonAltitudeGraph lat={40.7} lon={-74} tz="UTC" />);
+
+    const svg = screen.getByTestId("moon-graph-svg");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 160,
+      bottom: 36,
+      width: 160,
+      height: 36,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.pointerMove(svg, { clientX: 40, clientY: 18 });
+
+    expect(screen.queryByTestId("moon-hover-tooltip")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("moon-hover-marker")).not.toBeInTheDocument();
   });
 });

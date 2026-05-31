@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 import { useMoonCard } from "../hooks/useAstronomy";
@@ -30,6 +30,11 @@ const MOON_VISUAL_PEAK_Y = 8;
 const MOON_VISUAL_TROUGH_Y = 32.5;
 const MOON_VISUAL_SAMPLES = 220;
 const MOON_BELOW_HORIZON_LINEAR_BLEND = 0.38;
+const MOON_HOVER_TOOLTIP_EDGE_PADDING_PCT = 4;
+const MOON_HOVER_TOOLTIP_OFFSET_PCT = 2.5;
+const MOON_HOVER_TOOLTIP_CENTER_MIN_PCT = 32;
+const MOON_HOVER_TOOLTIP_CENTER_MAX_PCT = 68;
+const MOON_HOVER_TOOLTIP_HIGH_POINT_THRESHOLD_PCT = 46;
 const MOON_PLOT_TOP_Y = 2;
 const MOON_PLOT_BOTTOM_Y = VIEW_H - 2;
 const MIN_MOON_ABOVE_ALTITUDE = 20;
@@ -69,6 +74,12 @@ type AltitudePlotPoint = {
 
 type ValidTimedAltitudeSample = TimedAltitudeSample & {
   ms: number;
+};
+
+type MoonHoverTooltipLayout = {
+  leftPct: number;
+  horizontalAlign: "start" | "center" | "end";
+  verticalAlign: "top" | "bottom";
 };
 
 const TWILIGHT_BAND_COLOR: Record<TwilightPhase, string> = {
@@ -153,6 +164,38 @@ const WEATHER_SKY_IMAGE_URL: Record<WeatherCondition, string> = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+function formatRoundedDegrees(value: number) {
+  return `${Math.round(value)}°`;
+}
+
+function toCompassDirection(azDeg: number) {
+  const dirs = [
+    "N",
+    "NNE",
+    "NE",
+    "ENE",
+    "E",
+    "ESE",
+    "SE",
+    "SSE",
+    "S",
+    "SSW",
+    "SW",
+    "WSW",
+    "W",
+    "WNW",
+    "NW",
+    "NNW",
+  ];
+  const normalized = ((azDeg % 360) + 360) % 360;
+  return dirs[Math.round(normalized / 22.5) % dirs.length];
+}
+
+function formatAzimuthWithDirection(azDeg: number) {
+  const normalized = Math.round(((azDeg % 360) + 360) % 360);
+  return `${toCompassDirection(normalized)} / ${normalized}°`;
+}
 
 function resolveWeatherSkyImage(condition: WeatherCondition | undefined) {
   return WEATHER_SKY_IMAGE_URL[condition ?? "clear"];
@@ -317,6 +360,75 @@ export function buildAltitudePlotPoints(input: {
     azimuthDeg: sample.azimuth_deg,
     aboveHorizon: sample.above_horizon,
   }));
+}
+
+export function findNearestMoonSampleByMs(
+  points: AltitudePlotPoint[],
+  targetMs: number,
+) {
+  if (points.length === 0) {
+    return null;
+  }
+
+  let nearestPoint = points[0];
+  let nearestDistance = Math.abs(points[0].ms - targetMs);
+
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index];
+    const distance = Math.abs(point.ms - targetMs);
+
+    if (distance < nearestDistance) {
+      nearestPoint = point;
+      nearestDistance = distance;
+      continue;
+    }
+
+    if (point.ms > targetMs && distance > nearestDistance) {
+      break;
+    }
+  }
+
+  return nearestPoint;
+}
+
+export function buildMoonHoverTooltipLayout(input: {
+  hoverX: number;
+  hoverY: number;
+}): MoonHoverTooltipLayout {
+  const hoverXPct = clamp01(input.hoverX / VIEW_W) * 100;
+  const hoverYPct = clamp01(input.hoverY / VIEW_H) * 100;
+  const verticalAlign =
+    hoverYPct < MOON_HOVER_TOOLTIP_HIGH_POINT_THRESHOLD_PCT
+      ? "bottom"
+      : "top";
+
+  if (hoverXPct <= MOON_HOVER_TOOLTIP_CENTER_MIN_PCT) {
+    return {
+      leftPct: Math.max(
+        MOON_HOVER_TOOLTIP_EDGE_PADDING_PCT,
+        hoverXPct + MOON_HOVER_TOOLTIP_OFFSET_PCT,
+      ),
+      horizontalAlign: "start",
+      verticalAlign,
+    };
+  }
+
+  if (hoverXPct >= MOON_HOVER_TOOLTIP_CENTER_MAX_PCT) {
+    return {
+      leftPct: Math.min(
+        100 - MOON_HOVER_TOOLTIP_EDGE_PADDING_PCT,
+        hoverXPct - MOON_HOVER_TOOLTIP_OFFSET_PCT,
+      ),
+      horizontalAlign: "end",
+      verticalAlign,
+    };
+  }
+
+  return {
+    leftPct: hoverXPct,
+    horizontalAlign: "center",
+    verticalAlign,
+  };
 }
 
 function easeInOutSine(progress: number) {
@@ -690,6 +802,13 @@ export default function MoonAltitudeGraph({
   const summaryQ = useMoonCard(lat, lon, tz, { label });
   const weatherQ = useWeatherNow(lat, lon);
   const idPrefix = useId().replace(/:/g, "-");
+  const [hoveredMoonSampleMs, setHoveredMoonSampleMs] = useState<number | null>(
+    null,
+  );
+
+  function handleChartPointerLeave() {
+    setHoveredMoonSampleMs(null);
+  }
 
   if (summaryQ.error && !summaryQ.data) {
     return (
@@ -745,6 +864,10 @@ export default function MoonAltitudeGraph({
     dayStartMs,
     dayEndMs,
   });
+  const hoveredMoonPoint =
+    hoveredMoonSampleMs === null
+      ? null
+      : findNearestMoonSampleByMs(moonPathPoints, hoveredMoonSampleMs);
   const hasRealMoonPath = moonPathPoints.length >= 2;
   const hasPartialTimeline =
     summary.twilight.segments.length === 0 ||
@@ -823,6 +946,45 @@ export default function MoonAltitudeGraph({
     peakMs: highMoonMs,
     isUp: summary.moon.is_up,
   });
+  const hoveredMoonVisualX = hoveredMoonPoint?.x ?? null;
+  const hoveredMoonVisualY =
+    hoveredMoonPoint === null
+      ? null
+      : getMoonVisualYForMs({
+          targetMs: hoveredMoonPoint.ms,
+          dayStartMs,
+          dayEndMs,
+          riseMs: moonriseMs,
+          setMs: moonsetMs,
+          peakMs: highMoonMs,
+          isUp: summary.moon.is_up,
+        });
+  const hoveredMoonTooltipLayout =
+    hoveredMoonVisualX === null || hoveredMoonVisualY === null
+      ? null
+      : buildMoonHoverTooltipLayout({
+          hoverX: hoveredMoonVisualX,
+          hoverY: hoveredMoonVisualY,
+        });
+
+  function handleChartPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (moonPathPoints.length === 0) {
+      setHoveredMoonSampleMs(null);
+      return;
+    }
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width <= 0) {
+      setHoveredMoonSampleMs(null);
+      return;
+    }
+
+    const svgX = clamp01((event.clientX - bounds.left) / bounds.width) * VIEW_W;
+    const targetMs = lerp(dayStartMs, dayEndMs, svgX / VIEW_W);
+    const nearestSample = findNearestMoonSampleByMs(moonPathPoints, targetMs);
+
+    setHoveredMoonSampleMs(nearestSample?.ms ?? null);
+  }
 
   const skyStripes = buildSkyStripes(twilightBands, dayStartMs, dayEndMs);
   const weatherCondition = weatherQ.data?.condition;
@@ -869,12 +1031,17 @@ export default function MoonAltitudeGraph({
       ) : null}
 
       <div className={`${DASHBOARD_SURFACE_CLASS} overflow-hidden bg-black/50 px-0 py-0`}>
-        <div className="aspect-[5/1.24] w-full">
+        <div className="relative aspect-[5/1.24] w-full">
           <svg
+            data-testid="moon-graph-svg"
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             preserveAspectRatio="none"
             className="block h-full w-full"
             style={{ isolation: "isolate" }}
+            onPointerDown={handleChartPointerMove}
+            onPointerMove={handleChartPointerMove}
+            onPointerLeave={handleChartPointerLeave}
+            onPointerCancel={handleChartPointerLeave}
           >
             <defs>
               <clipPath id={plotClipId}>
@@ -1074,9 +1241,77 @@ export default function MoonAltitudeGraph({
                   variant="photo"
                 />
                 <SunDisc mode="g" cx={sunDotX} cy={sunDotY} r={1.8} size={15} />
+                {hoveredMoonPoint !== null &&
+                hoveredMoonVisualX !== null &&
+                hoveredMoonVisualY !== null ? (
+                  <g id="moon-hover-marker" pointerEvents="none">
+                    <line
+                      data-testid="moon-hover-guide"
+                      x1={hoveredMoonVisualX}
+                      y1="0"
+                      x2={hoveredMoonVisualX}
+                      y2={VIEW_H}
+                      stroke="rgba(226,232,240,0.22)"
+                      strokeWidth="0.45"
+                      strokeDasharray="1.2 1.7"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      cx={hoveredMoonVisualX}
+                      cy={hoveredMoonVisualY}
+                      r="2.1"
+                      fill="rgba(191,219,254,0.12)"
+                      stroke="rgba(226,232,240,0.55)"
+                      strokeWidth="0.45"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      data-testid="moon-hover-marker"
+                      cx={hoveredMoonVisualX}
+                      cy={hoveredMoonVisualY}
+                      r="0.95"
+                      fill="rgba(248,250,252,0.96)"
+                    />
+                  </g>
+                ) : null}
               </g>
             </g>
           </svg>
+          {hoveredMoonPoint !== null && hoveredMoonTooltipLayout !== null ? (
+            <div
+              data-testid="moon-hover-tooltip"
+              className={`pointer-events-none absolute z-10 w-[10.5rem] rounded-lg border border-white/12 bg-slate-950/88 px-2.5 py-2 text-[10px] leading-[1.25] text-slate-100 shadow-lg shadow-black/35 ring-1 ring-black/20 backdrop-blur-md transition-opacity duration-150 ${
+                hoveredMoonTooltipLayout.verticalAlign === "top"
+                  ? "top-2"
+                  : "bottom-2"
+              } ${
+                hoveredMoonTooltipLayout.horizontalAlign === "start"
+                  ? "translate-x-0"
+                  : hoveredMoonTooltipLayout.horizontalAlign === "end"
+                    ? "-translate-x-full"
+                    : "-translate-x-1/2"
+              }`}
+              style={{
+                left: `${hoveredMoonTooltipLayout.leftPct}%`,
+                maxWidth: "calc(100% - 0.75rem)",
+              }}
+            >
+              <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                <span className="text-slate-400">Time</span>
+                <span>{formatInTimeZone(new Date(hoveredMoonPoint.ms), tz, "h:mm a")}</span>
+                <span className="text-slate-400">Moon altitude</span>
+                <span>{formatRoundedDegrees(hoveredMoonPoint.altitudeDeg)}</span>
+                <span className="text-slate-400">Direction</span>
+                <span>{formatAzimuthWithDirection(hoveredMoonPoint.azimuthDeg)}</span>
+                <span className="text-slate-400">Status</span>
+                <span>
+                  {hoveredMoonPoint.aboveHorizon
+                    ? "Above horizon"
+                    : "Below horizon"}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
