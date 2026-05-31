@@ -15,15 +15,10 @@ import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import { SunDisc } from "./SunDisc";
 import {
   DASHBOARD_BADGE_MUTED_CLASS,
-  DASHBOARD_METRIC_TILE_CLASS,
-  DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
   DASHBOARD_SURFACE_CLASS,
-  DASHBOARD_VALUE_CLASS,
-  formatMoonEventDetail,
-  formatTimeOrDateTime,
 } from "./moonDashboardShared";
 import nightStars from "../../public/sky/night-starfield.jpg";
 
@@ -31,8 +26,6 @@ const VIEW_W = 160;
 const VIEW_H = 36;
 const HORIZON_Y = 21;
 const AMP = 12;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
 
 type SkyStripe = {
@@ -62,14 +55,6 @@ const TWILIGHT_LABEL: Record<TwilightPhase, string> = {
   civil: "Civil",
   day: "Day",
 };
-
-const TWILIGHT_LEGEND_ORDER: TwilightPhase[] = [
-  "day",
-  "civil",
-  "nautical",
-  "astronomical",
-  "dark",
-];
 
 const PHASE_WEATHER_IMAGE_OPACITY: Record<TwilightPhase, number> = {
   day: 0.98,
@@ -196,29 +181,6 @@ function nextDateIso(dateIso: string): string {
 function timeToX(ms: number, dayStartMs: number, dayEndMs: number): number {
   const span = Math.max(1, dayEndMs - dayStartMs);
   return clamp01((ms - dayStartMs) / span) * VIEW_W;
-}
-
-function formatDegrees(value: number | null | undefined): string {
-  return typeof value === "number" ? `${Math.round(value)}°` : "—";
-}
-
-function toCompass(azDeg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  const normalized = ((azDeg % 360) + 360) % 360;
-  return dirs[Math.round(normalized / 45) % dirs.length];
-}
-
-function formatAzimuthWithDirection(azDeg: number | null | undefined): string {
-  if (typeof azDeg !== "number") return "Azimuth unavailable";
-
-  const normalized = Math.round(((azDeg % 360) + 360) % 360);
-  return `${toCompass(normalized)} (${normalized}°)`;
-}
-
-function formatVisibilityLabel(isUp: boolean | null | undefined): string {
-  if (isUp === true) return "Above horizon";
-  if (isUp === false) return "Below horizon";
-  return "Horizon pending";
 }
 
 function buildTwilightBands(input: {
@@ -552,63 +514,6 @@ export default function MoonAltitudeGraph({
   const skyShadowOpacity = lerp(0.05, 0.16, weatherCloudCover);
   const weatherAtmosphereOpacity = lerp(0.03, 0.12, weatherCloudCover);
 
-  const nextPhaseStartLabel = TWILIGHT_LEGEND_ORDER.reduce(
-    (acc, phase) => {
-      const starts = twilightBands
-        .filter((band) => band.phase === phase)
-        .map((band) => band.startMs)
-        .sort((a, b) => a - b);
-
-      if (!starts.length) {
-        acc[phase] = "—";
-        return acc;
-      }
-
-      const upcoming = starts.find((startMs) => startMs >= nowMs);
-      const nextStartMs = upcoming ?? starts[0] + DAY_MS;
-      acc[phase] = formatInTimeZone(new Date(nextStartMs), tz, "h:mm a");
-      return acc;
-    },
-    {} as Record<TwilightPhase, string>,
-  );
-
-  const sunriseLegendLabel = summary.sun.sunrise
-    ? formatInTimeZone(new Date(summary.sun.sunrise), tz, "h:mm a")
-    : "—";
-  const sunsetLegendLabel = summary.sun.sunset
-    ? formatInTimeZone(new Date(summary.sun.sunset), tz, "h:mm a")
-    : "—";
-  const moonsetLegendLabel = summary.moon.moonset
-    ? formatInTimeZone(new Date(summary.moon.moonset), tz, "h:mm a")
-    : "—";
-  const compactContextItems = [
-    {
-      label: "Peak altitude",
-      value: formatTimeOrDateTime(summary.moon.high_moon ?? undefined, tz),
-      detail: formatMoonEventDetail("high_moon"),
-    },
-    {
-      label: "Sun altitude",
-      value: formatDegrees(summary.sun.altitude_deg),
-      detail: `${formatAzimuthWithDirection(summary.sun.azimuth_deg)} · ${formatVisibilityLabel(summary.sun.is_up)}`,
-    },
-    {
-      label: "Moonset",
-      value: moonsetLegendLabel,
-      detail: formatMoonEventDetail("moonset"),
-    },
-    {
-      label: "Sunrise",
-      value: sunriseLegendLabel,
-      detail: "Sun reaches the horizon.",
-    },
-    {
-      label: "Sunset",
-      value: sunsetLegendLabel,
-      detail: "Sun drops below the horizon.",
-    },
-  ];
-
   const lastUpdatedLabel = summaryQ.dataUpdatedAt
     ? formatInTimeZone(new Date(summaryQ.dataUpdatedAt), tz, "h:mm a")
     : "—";
@@ -853,45 +758,6 @@ export default function MoonAltitudeGraph({
               </g>
             </g>
           </svg>
-        </div>
-      </div>
-
-      <div className="border-t border-white/7 pt-2.5">
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200/68">
-          {TWILIGHT_LEGEND_ORDER.map((phase) => (
-            <span
-              key={phase}
-              className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5`}
-            >
-              <span
-                className="h-2 w-2 rounded-sm ring-1 ring-white/15"
-                style={{ backgroundColor: TWILIGHT_BAND_COLOR[phase] }}
-              />
-              <span className="uppercase tracking-[0.14em] text-sky-100/58">
-                {TWILIGHT_LABEL[phase]}
-              </span>
-              <span className="font-semibold tracking-normal text-slate-100">
-                {nextPhaseStartLabel[phase]}
-              </span>
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-          {compactContextItems.map((item) => (
-            <div
-              key={item.label}
-              className={DASHBOARD_METRIC_TILE_CLASS}
-            >
-              <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
-              <div className={`${DASHBOARD_VALUE_CLASS} leading-tight`}>
-                {item.value}
-              </div>
-              <div className="mt-1 text-[10px] leading-relaxed text-slate-300/62">
-                {item.detail}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

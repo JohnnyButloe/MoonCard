@@ -20,22 +20,13 @@ import {
   DASHBOARD_SUPPORT_TEXT_CLASS,
   DASHBOARD_SURFACE_CLASS,
   DASHBOARD_VALUE_CLASS,
+  DASHBOARD_VALUE_LARGE_CLASS,
   WeatherCloudSymbol,
   formatLocalDate,
   formatLocalTime,
-  formatTimeOrDateTime,
   getViewingAssessment,
   weatherLabel,
 } from "./moonDashboardShared";
-
-function formatTwilightLabel(value: string | null | undefined): string {
-  if (!value) return "Unavailable";
-
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
 
 export default function MoonContextCard({
   lat,
@@ -63,7 +54,7 @@ export default function MoonContextCard({
         title="Context unavailable"
         body="Location context and conditions could not be loaded."
         tone="danger"
-        minHeightClass={isCompact ? "min-h-[14rem] md:min-h-[15rem]" : "min-h-[18rem]"}
+        minHeightClass={isCompact ? "min-h-[12rem]" : "min-h-[18rem]"}
       >
         {onEditLocation ? (
           <button
@@ -81,7 +72,7 @@ export default function MoonContextCard({
   if (!summaryQ.data && !weatherQ.data) {
     if (isCompact) {
       return (
-        <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-3 md:min-h-[15rem]`}>
+        <div className={`${DASHBOARD_PANEL_CLASS} min-h-[12rem] gap-2.5`}>
           <div className={DASHBOARD_PANEL_HEADER_CLASS}>
             <div className="space-y-2">
               <DashboardSkeletonBlock className="h-2 w-20 rounded-full" />
@@ -90,9 +81,7 @@ export default function MoonContextCard({
             <DashboardSkeletonBlock className="h-8 w-16 rounded-full" />
           </div>
 
-          <DashboardSkeletonBlock className="h-[5.8rem] rounded-[1.1rem]" />
-
-          <div className={`${DASHBOARD_SURFACE_CLASS} space-y-3 py-3`}>
+          <div className="space-y-3">
             <div className="space-y-2">
               <DashboardSkeletonBlock className="h-2 w-16 rounded-full" />
               <DashboardSkeletonBlock className="h-4 w-24" />
@@ -186,14 +175,10 @@ export default function MoonContextCard({
     weatherCondition,
     weatherCloudCover,
   });
-  const twilightValue = formatTwilightLabel(summaryQ.data?.twilight.current_phase);
-  const twilightDetail = summaryQ.data?.twilight.next_transition
-    ? `Next transition ${formatTimeOrDateTime(summaryQ.data.twilight.next_transition, tz)}`
-    : "Next transition unavailable.";
 
   if (isCompact) {
     return (
-      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[14rem] gap-2.5 px-3.5 py-3.5 md:min-h-[15rem]`}>
+      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[12rem] gap-2.5 px-3.5 py-3.5`}>
         <header className={DASHBOARD_PANEL_HEADER_CLASS}>
           <div className="min-w-0">
             <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Context</p>
@@ -222,38 +207,26 @@ export default function MoonContextCard({
           </DashboardStatusBanner>
         ) : null}
 
-        <section className={`${DASHBOARD_SURFACE_CLASS} flex flex-1 flex-col justify-between gap-2 px-3 py-2.5`}>
-          <div>
+        <section className="flex flex-1 flex-col gap-3">
+          <div className="min-w-0">
             <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing</div>
-            <div className="mt-1 text-base font-semibold text-slate-50">
+            <div className={`${DASHBOARD_VALUE_LARGE_CLASS} mt-1 text-[1.18rem] sm:text-[1.26rem]`}>
               {viewingAssessment.label}
             </div>
-            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>
+            <div className="mt-1 text-[12px] leading-relaxed text-slate-300/72">
               {viewingAssessment.summary}
             </div>
           </div>
 
-          <div className="grid gap-2 border-t border-white/7 pt-2">
-            <div className="min-w-0">
-              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight</div>
-              <div className={`${DASHBOARD_VALUE_CLASS} mt-0.5 leading-tight`}>
-                {twilightValue}
-              </div>
-              <div className={`mt-0.5 ${DASHBOARD_MUTED_TEXT_CLASS}`}>
-                {twilightDetail}
-              </div>
+          <div className="flex min-w-0 items-center gap-2.5 border-t border-white/7 pt-2.5">
+            <div className={`${DASHBOARD_ICON_BADGE_CLASS} h-8 w-8 shrink-0`}>
+              <WeatherCloudSymbol condition={weatherCondition} size={20} />
             </div>
-
-            <div className="flex min-w-0 items-start gap-2.5 border-t border-white/7 pt-2">
-              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 h-9 w-9 shrink-0`}>
-                <WeatherCloudSymbol condition={weatherCondition} size={24} />
-              </div>
-              <div className="min-w-0">
-                <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
-                <div className={DASHBOARD_VALUE_CLASS}>
-                  {weatherTitle}
-                  <span className="font-normal text-slate-300/76"> · {weatherDetail}</span>
-                </div>
+            <div className="min-w-0">
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Weather</div>
+              <div className={`${DASHBOARD_VALUE_CLASS} mt-1 leading-tight`}>
+                {weatherTitle}
+                <span className="font-normal text-slate-300/76"> · {weatherDetail}</span>
               </div>
             </div>
           </div>

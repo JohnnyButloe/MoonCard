@@ -9,6 +9,7 @@ import MoonAltitudeGraph from "./MoonGraph";
 import MoonCalendarPreview from "./MoonCalendarPreview";
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import MoonPhaseCalendar from "./MoonPhaseCalendar";
+import MoonSupportingDetails from "./MoonSupportingDetails";
 import LocationSearch from "./LocationSearch";
 import LocationOnboarding from "./LocationOnboarding";
 import MoonTonightHero from "./MoonTonightHero";
@@ -234,7 +235,7 @@ function DashboardContent({
         </header>
 
         {hasActiveLocation ? (
-          <div className="grid gap-3.5 sm:gap-4 md:grid-cols-12 md:items-stretch">
+          <div className="grid gap-3 sm:gap-3.5 md:grid-cols-12 md:items-stretch">
             <DashboardSectionFrame
               title="Moon overview"
               className="flex min-w-0 md:col-span-8"
@@ -270,6 +271,20 @@ function DashboardContent({
             >
               <section className="flex min-w-0">
                 <MoonAltitudeGraph
+                  lat={active.latitude}
+                  lon={active.longitude}
+                  tz={tz}
+                  label={active.label}
+                />
+              </section>
+            </DashboardSectionFrame>
+
+            <DashboardSectionFrame
+              title="Supporting lunar details"
+              className="min-w-0 md:col-span-12"
+            >
+              <section className="flex min-w-0">
+                <MoonSupportingDetails
                   lat={active.latitude}
                   lon={active.longitude}
                   tz={tz}

@@ -10,6 +10,7 @@ import {
   DASHBOARD_META_FOOTER_CLASS,
   DASHBOARD_METRIC_TILE_CLASS,
   DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
@@ -19,6 +20,63 @@ import {
   formatLocalTime,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
+
+function formatDegrees(value: number | null | undefined): string {
+  return typeof value === "number" ? `${Math.round(value)}°` : "—";
+}
+
+function toCompass(azDeg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((azDeg % 360) + 360) % 360;
+  return dirs[Math.round(normalized / 45) % dirs.length];
+}
+
+function formatAzimuthWithDirection(azDeg: number | null | undefined): string {
+  if (typeof azDeg !== "number") return "—";
+
+  const normalized = Math.round(((azDeg % 360) + 360) % 360);
+  return `${toCompass(normalized)} (${normalized}°)`;
+}
+
+function formatVisibilityLabel(isUp: boolean | null | undefined): string {
+  if (isUp === true) return "Above horizon";
+  if (isUp === false) return "Below horizon";
+  return "Horizon pending";
+}
+
+function formatTwilightLabel(value: string | null | undefined): string {
+  if (!value) return "Unavailable";
+
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatClockTime(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "—";
+
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  }).format(d);
+}
+
+function formatTwilightWindow(
+  dawnIso: string | null | undefined,
+  duskIso: string | null | undefined,
+  tz: string,
+): string {
+  const dawn = formatClockTime(dawnIso, tz);
+  const dusk = formatClockTime(duskIso, tz);
+
+  if (dawn === "—" && dusk === "—") return "—";
+  return `${dawn} / ${dusk}`;
+}
 
 export default function MoonSupportingDetails({
   lat,
@@ -106,6 +164,62 @@ export default function MoonSupportingDetails({
       value: formatTimeOrDateTime(summary.sun.sunset ?? undefined, tz),
     },
   ];
+  const positionItems = [
+    {
+      label: "Moon altitude",
+      value: formatDegrees(summary.moon.altitude_deg),
+      detail: formatVisibilityLabel(summary.moon.is_up),
+    },
+    {
+      label: "Moon azimuth",
+      value: formatAzimuthWithDirection(summary.moon.azimuth_deg),
+      detail: "Current bearing",
+    },
+    {
+      label: "Sun altitude",
+      value: formatDegrees(summary.sun.altitude_deg),
+      detail: formatVisibilityLabel(summary.sun.is_up),
+    },
+    {
+      label: "Sun azimuth",
+      value: formatAzimuthWithDirection(summary.sun.azimuth_deg),
+      detail: "Current bearing",
+    },
+  ];
+  const twilightItems = [
+    {
+      label: "Current phase",
+      value: formatTwilightLabel(summary.twilight.current_phase),
+    },
+    {
+      label: "Next transition",
+      value: formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz),
+    },
+    {
+      label: "Civil twilight",
+      value: formatTwilightWindow(
+        summary.twilight.civil_dawn,
+        summary.twilight.civil_dusk,
+        tz,
+      ),
+    },
+    {
+      label: "Nautical twilight",
+      value: formatTwilightWindow(
+        summary.twilight.nautical_dawn,
+        summary.twilight.nautical_dusk,
+        tz,
+      ),
+    },
+    {
+      label: "Astronomical twilight",
+      value: formatTwilightWindow(
+        summary.twilight.astronomical_dawn,
+        summary.twilight.astronomical_dusk,
+        tz,
+      ),
+    },
+  ];
   const updatedLabel =
     summaryQ.dataUpdatedAt > 0
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
@@ -123,7 +237,7 @@ export default function MoonSupportingDetails({
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[19rem]`}>
       <header className="min-w-0">
         <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Supporting context</p>
-        <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Rise/set details</h2>
+        <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Extended lunar details</h2>
       </header>
 
       {status ? (
@@ -132,27 +246,71 @@ export default function MoonSupportingDetails({
         </DashboardStatusBanner>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-        {events.map((event) => (
-          <div
-            key={event.label}
-            className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5.4rem]`}
-          >
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>{event.label}</div>
-            <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
-              {event.value}
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="space-y-3">
+          <section className={DASHBOARD_SURFACE_CLASS}>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Exact position</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {positionItems.map((item) => (
+                <div
+                  key={item.label}
+                  className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5rem]`}
+                >
+                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
+                  <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
+                    {item.value}
+                  </div>
+                  <div className={DASHBOARD_MUTED_TEXT_CLASS}>{item.detail}</div>
+                </div>
+              ))}
             </div>
-          </div>
-        ))}
-      </section>
+          </section>
 
-      <section className={DASHBOARD_SURFACE_CLASS}>
-        <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing conditions</div>
-        <div className="mt-1 text-sm font-semibold text-slate-50">
-          {viewingLabel}
+          <section className={DASHBOARD_SURFACE_CLASS}>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Moon and sun events</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 xl:grid-cols-3">
+              {events.map((event) => (
+                <div
+                  key={event.label}
+                  className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5.25rem]`}
+                >
+                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{event.label}</div>
+                  <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
+                    {event.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
-        <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
-      </section>
+
+        <div className="space-y-3">
+          <section className={DASHBOARD_SURFACE_CLASS}>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight details</div>
+            <div className="mt-2 space-y-2">
+              {twilightItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-start justify-between gap-3 border-b border-white/7 pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
+                  <div className="text-right text-[12px] font-medium text-slate-100">
+                    {item.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className={DASHBOARD_SURFACE_CLASS}>
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing notes</div>
+            <div className="mt-1 text-sm font-semibold text-slate-50">
+              {viewingLabel}
+            </div>
+            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
+          </section>
+        </div>
+      </div>
 
       <footer className={DASHBOARD_META_FOOTER_CLASS}>
         <div>Source: {summary.meta.calculation_source}</div>
