@@ -106,6 +106,7 @@ function buildEmptyMoonData(): MoonCardMoonData {
     moonset: null,
     high_moon: null,
     low_moon: null,
+    path: null,
   };
 }
 
@@ -211,6 +212,64 @@ function mapTwilightSegments(rawSegments: unknown): MoonCardTwilightSegment[] {
         null,
     };
   });
+}
+
+function mapMoonPath(rawPath: unknown): MoonCardMoonData["path"] {
+  const path = asRecord(rawPath);
+  if (!path) {
+    return null;
+  }
+
+  const rawSamples = Array.isArray(path.samples) ? path.samples : [];
+  const samples = rawSamples
+    .map((entry) => {
+      const sample = asRecord(entry);
+      const timeUtc = asStringOrNull(sample?.time_utc);
+      const timeLocal = asStringOrNull(sample?.time_local);
+      const altitudeDeg = asFiniteNumberOrNull(sample?.altitude_deg);
+      const azimuthDeg = asFiniteNumberOrNull(sample?.azimuth_deg);
+      const aboveHorizon = asBooleanOrNull(sample?.above_horizon);
+
+      if (
+        timeUtc === null ||
+        timeLocal === null ||
+        altitudeDeg === null ||
+        azimuthDeg === null ||
+        aboveHorizon === null
+      ) {
+        return null;
+      }
+
+      return {
+        time_utc: timeUtc,
+        time_local: timeLocal,
+        altitude_deg: altitudeDeg,
+        azimuth_deg: azimuthDeg,
+        above_horizon: aboveHorizon,
+      };
+    })
+    .filter((sample): sample is NonNullable<typeof sample> => sample !== null);
+
+  const windowStartLocal = asStringOrNull(path.window_start_local);
+  const windowEndLocal = asStringOrNull(path.window_end_local);
+  const sampleCount = asFiniteNumberOrNull(path.sample_count);
+
+  if (
+    windowStartLocal === null ||
+    windowEndLocal === null ||
+    sampleCount === null ||
+    !Number.isInteger(sampleCount) ||
+    sampleCount < 2
+  ) {
+    return null;
+  }
+
+  return {
+    window_start_local: windowStartLocal,
+    window_end_local: windowEndLocal,
+    sample_count: sampleCount,
+    samples,
+  };
 }
 
 function isMoonCardErrorCode(value: unknown): value is MoonCardError["code"] {
@@ -351,6 +410,7 @@ export function mapPythonResponse(
           moonset: asStringOrNull(moon?.moonset),
           high_moon: asStringOrNull(moon?.high_moon),
           low_moon: asStringOrNull(moon?.low_moon),
+          path: mapMoonPath(moon?.path),
         }
       : buildEmptyMoonData(),
     sun: pythonPayload.include_sun

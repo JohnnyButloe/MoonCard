@@ -41,6 +41,7 @@ describe("normalizeMoonCardResponse", () => {
       "low_moon",
       "moonrise",
       "moonset",
+      "path",
       "phase_angle_deg",
       "phase_name",
     ]);
@@ -48,6 +49,29 @@ describe("normalizeMoonCardResponse", () => {
     expect(result.value.meta.data_version).toBe("mooncard/v1");
     expect(result.value.meta.location.label).toBe("Testville");
     expect(result.value.twilight.current_phase).toBe("astronomical");
+    expect(result.value.moon.path?.samples).toEqual([
+      {
+        time_utc: "2026-04-05T00:00:00Z",
+        time_local: "2026-04-05T00:00:00+00:00",
+        altitude_deg: -18.4,
+        azimuth_deg: 91.2,
+        above_horizon: false,
+      },
+      {
+        time_utc: "2026-04-05T06:30:00Z",
+        time_local: "2026-04-05T06:30:00+00:00",
+        altitude_deg: 32.4,
+        azimuth_deg: 143.2,
+        above_horizon: true,
+      },
+      {
+        time_utc: "2026-04-06T00:00:00Z",
+        time_local: "2026-04-06T00:00:00+00:00",
+        altitude_deg: -27.6,
+        azimuth_deg: 287.1,
+        above_horizon: false,
+      },
+    ]);
     expect(result.value.visibility.summary).toBe(
       "Astronomical twilight still supports darker-sky viewing.",
     );
@@ -60,6 +84,27 @@ describe("normalizeMoonCardResponse", () => {
           altitude_deg: "not-a-number",
           illumination_percent: "unknown",
           moonrise: 42,
+          path: {
+            window_start_local: "2026-04-05T00:00:00+00:00",
+            window_end_local: "2026-04-06T00:00:00+00:00",
+            sample_count: 220,
+            samples: [
+              {
+                time_utc: "2026-04-05T00:00:00Z",
+                time_local: "2026-04-05T00:00:00+00:00",
+                altitude_deg: -18.4,
+                azimuth_deg: 91.2,
+                above_horizon: false,
+              },
+              {
+                time_utc: "2026-04-05T01:00:00Z",
+                time_local: "2026-04-05T01:00:00+00:00",
+                altitude_deg: "high",
+                azimuth_deg: 101.2,
+                above_horizon: true,
+              },
+            ],
+          },
         },
         sun: {
           sunrise: null,
@@ -97,6 +142,15 @@ describe("normalizeMoonCardResponse", () => {
     expect(result.value.moon.altitude_deg).toBeNull();
     expect(result.value.moon.illumination_percent).toBeNull();
     expect(result.value.moon.moonrise).toBeNull();
+    expect(result.value.moon.path?.samples).toEqual([
+      {
+        time_utc: "2026-04-05T00:00:00Z",
+        time_local: "2026-04-05T00:00:00+00:00",
+        altitude_deg: -18.4,
+        azimuth_deg: 91.2,
+        above_horizon: false,
+      },
+    ]);
     expect(result.value.sun.sunrise).toBeNull();
     expect(result.value.twilight.segments).toEqual([
       {

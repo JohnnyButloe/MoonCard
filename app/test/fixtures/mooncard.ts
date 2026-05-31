@@ -126,6 +126,34 @@ export function buildPythonMoonCardResponse(
         moonset: "2026-04-05T13:45:00Z",
         high_moon: "2026-04-05T07:20:00Z",
         low_moon: "2026-04-05T19:50:00Z",
+        path: {
+          window_start_local: "2026-04-05T00:00:00+00:00",
+          window_end_local: "2026-04-06T00:00:00+00:00",
+          sample_count: 220,
+          samples: [
+            {
+              time_utc: "2026-04-05T00:00:00Z",
+              time_local: "2026-04-05T00:00:00+00:00",
+              altitude_deg: -18.4,
+              azimuth_deg: 91.2,
+              above_horizon: false,
+            },
+            {
+              time_utc: "2026-04-05T06:30:00Z",
+              time_local: "2026-04-05T06:30:00+00:00",
+              altitude_deg: 32.4,
+              azimuth_deg: 143.2,
+              above_horizon: true,
+            },
+            {
+              time_utc: "2026-04-06T00:00:00Z",
+              time_local: "2026-04-06T00:00:00+00:00",
+              altitude_deg: -27.6,
+              azimuth_deg: 287.1,
+              above_horizon: false,
+            },
+          ],
+        },
       },
       sun: {
         altitude_deg: -12.4,
@@ -218,6 +246,34 @@ export function buildCanonicalMoonCardResponse(
         moonset: "2026-04-05T13:45:00Z",
         high_moon: "2026-04-05T07:20:00Z",
         low_moon: "2026-04-05T19:50:00Z",
+        path: {
+          window_start_local: "2026-04-05T00:00:00+00:00",
+          window_end_local: "2026-04-06T00:00:00+00:00",
+          sample_count: 220,
+          samples: [
+            {
+              time_utc: "2026-04-05T00:00:00Z",
+              time_local: "2026-04-05T00:00:00+00:00",
+              altitude_deg: -18.4,
+              azimuth_deg: 91.2,
+              above_horizon: false,
+            },
+            {
+              time_utc: "2026-04-05T06:30:00Z",
+              time_local: "2026-04-05T06:30:00+00:00",
+              altitude_deg: 32.4,
+              azimuth_deg: 143.2,
+              above_horizon: true,
+            },
+            {
+              time_utc: "2026-04-06T00:00:00Z",
+              time_local: "2026-04-06T00:00:00+00:00",
+              altitude_deg: -27.6,
+              azimuth_deg: 287.1,
+              above_horizon: false,
+            },
+          ],
+        },
       },
       sun: {
         altitude_deg: -12.4,
@@ -303,13 +359,15 @@ export function buildAstronomySummary(
             previous_bundle_ms: 0.4,
             next_bundle_ms: 0.5,
             sun_path_ms: 2.2,
+            moon_path_ms: 2.4,
             moon_current_ms: 1.1,
             sun_current_ms: 0.8,
             assembly_ms: 0.1,
-            total_ms: 6.6,
+            total_ms: 9,
           },
           cache_keys: {
             summary_bundle: "astronomy:test",
+            moon_path: "astronomy-moon-path:test",
             sun_path: "astronomy-sun-path:test",
           },
           cache: {
@@ -337,6 +395,13 @@ export function buildAstronomySummary(
             sun_path: {
               status: "hit",
               hits: 8,
+              misses: 2,
+              size: 1,
+              max_size: 256,
+            },
+            moon_path: {
+              status: "hit",
+              hits: 7,
               misses: 2,
               size: 1,
               max_size: 256,
@@ -401,6 +466,34 @@ export function buildAstronomySummary(
             low_moon_local: "2026-04-06T20:34:00+00:00",
             phase_name: "Waxing Gibbous",
           },
+        },
+        path: {
+          window_start_local: "2026-04-05T00:00:00+00:00",
+          window_end_local: "2026-04-06T00:00:00+00:00",
+          sample_count: 220,
+          samples: [
+            {
+              time_utc: "2026-04-05T00:00:00Z",
+              time_local: "2026-04-05T00:00:00+00:00",
+              altitude_deg: -18.4,
+              azimuth_deg: 91.2,
+              above_horizon: false,
+            },
+            {
+              time_utc: "2026-04-05T06:30:00Z",
+              time_local: "2026-04-05T06:30:00+00:00",
+              altitude_deg: 32.4,
+              azimuth_deg: 143.2,
+              above_horizon: true,
+            },
+            {
+              time_utc: "2026-04-06T00:00:00Z",
+              time_local: "2026-04-06T00:00:00+00:00",
+              altitude_deg: -27.6,
+              azimuth_deg: 287.1,
+              above_horizon: false,
+            },
+          ],
         },
       },
       sun: {

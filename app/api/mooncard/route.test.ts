@@ -51,6 +51,13 @@ describe("/api/mooncard", () => {
     expect(body.data.meta.location.label).toBe("Testville");
     expect(body.data.meta.calculation_source).toBe("python_microservice");
     expect(body.data.moon.phase_name).toBe("Waxing Gibbous");
+    expect(body.data.moon.path?.sample_count).toBe(220);
+    expect(body.data.moon.path?.samples[1]).toMatchObject({
+      time_utc: "2026-04-05T06:30:00Z",
+      altitude_deg: 32.4,
+      azimuth_deg: 143.2,
+      above_horizon: true,
+    });
     expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(mockFetchMoonCardUpstream).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -159,6 +166,27 @@ describe("/api/mooncard", () => {
           azimuth_deg: null,
           illumination_percent: "unknown",
           moonrise: 9,
+          path: {
+            window_start_local: "2026-04-05T00:00:00+00:00",
+            window_end_local: "2026-04-06T00:00:00+00:00",
+            sample_count: 220,
+            samples: [
+              {
+                time_utc: "2026-04-05T00:00:00Z",
+                time_local: "2026-04-05T00:00:00+00:00",
+                altitude_deg: -18.4,
+                azimuth_deg: 91.2,
+                above_horizon: false,
+              },
+              {
+                time_utc: "2026-04-05T01:00:00Z",
+                time_local: "2026-04-05T01:00:00+00:00",
+                altitude_deg: "high",
+                azimuth_deg: 95.1,
+                above_horizon: true,
+              },
+            ],
+          },
         },
         sun: {
           sunrise: null,
@@ -196,6 +224,15 @@ describe("/api/mooncard", () => {
     expect(body.data.moon.azimuth_deg).toBeNull();
     expect(body.data.moon.illumination_percent).toBeNull();
     expect(body.data.moon.moonrise).toBeNull();
+    expect(body.data.moon.path.samples).toEqual([
+      {
+        time_utc: "2026-04-05T00:00:00Z",
+        time_local: "2026-04-05T00:00:00+00:00",
+        altitude_deg: -18.4,
+        azimuth_deg: 91.2,
+        above_horizon: false,
+      },
+    ]);
     expect(body.data.sun.sunrise).toBeNull();
     expect(body.data.twilight.segments).toEqual([
       {

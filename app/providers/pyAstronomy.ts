@@ -60,6 +60,18 @@ export interface AstronomySummary {
       previous_day: AstronomyMoonEventSet;
       next_day: AstronomyMoonEventSet;
     };
+    path: {
+      window_start_local: string;
+      window_end_local: string;
+      sample_count: number;
+      samples: Array<{
+        time_utc: string;
+        time_local: string;
+        altitude_deg: number;
+        azimuth_deg: number;
+        above_horizon: boolean;
+      }>;
+    };
   };
   sun: {
     current: {

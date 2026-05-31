@@ -108,6 +108,21 @@ class MoonCardResponseMetaModel(MoonCardContractModel):
     units: MoonCardUnitsModel = Field(default_factory=MoonCardUnitsModel)
 
 
+class MoonCardMoonPathSampleModel(MoonCardContractModel):
+    time_utc: MoonCardResponseTimestamp
+    time_local: MoonCardResponseTimestamp
+    altitude_deg: float
+    azimuth_deg: float
+    above_horizon: bool
+
+
+class MoonCardMoonPathModel(MoonCardContractModel):
+    window_start_local: MoonCardResponseTimestamp
+    window_end_local: MoonCardResponseTimestamp
+    sample_count: int = Field(ge=2)
+    samples: list[MoonCardMoonPathSampleModel] = Field(default_factory=list)
+
+
 class MoonCardMoonDataModel(MoonCardContractModel):
     phase_name: str | None = None
     phase_angle_deg: float | None = None
@@ -121,6 +136,7 @@ class MoonCardMoonDataModel(MoonCardContractModel):
     moonset: MoonCardResponseTimestamp | None = None
     high_moon: MoonCardResponseTimestamp | None = None
     low_moon: MoonCardResponseTimestamp | None = None
+    path: MoonCardMoonPathModel | None = None
 
 
 class MoonCardSunDataModel(MoonCardContractModel):

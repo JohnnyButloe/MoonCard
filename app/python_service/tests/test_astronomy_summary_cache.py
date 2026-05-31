@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.python_service import astronomy
 from app.python_service.moon import MoonEvents
@@ -12,12 +12,14 @@ def test_astronomy_summary_reuses_daily_bundles_across_sun_path_variants(
 ) -> None:
     astronomy._daily_bundle_cached.cache_clear()
     astronomy._sun_path_cached.cache_clear()
+    astronomy._moon_path_cached.cache_clear()
 
     calls = {
         "moon_events": 0,
         "sun_events": 0,
         "twilight": 0,
         "sun_path": 0,
+        "moon_path": 0,
         "moon_now": 0,
         "sun_current": 0,
     }
@@ -73,6 +75,24 @@ def test_astronomy_summary_reuses_daily_bundles_across_sun_path_variants(
             ],
         }
 
+    def fake_build_moon_path_samples(*args, **kwargs):
+        calls["moon_path"] += 1
+        sample_count = kwargs["sample_count"]
+        return {
+            "window_start_local": "2026-03-28T00:00:00-04:00",
+            "window_end_local": "2026-03-29T00:00:00-04:00",
+            "sample_count": sample_count,
+            "samples": [
+                {
+                    "time_utc": "2026-03-28T04:00:00Z",
+                    "time_local": "2026-03-28T00:00:00-04:00",
+                    "altitude_deg": -15.0,
+                    "azimuth_deg": 88.0,
+                    "above_horizon": False,
+                }
+            ],
+        }
+
     def fake_moon_now(*args, **kwargs):
         calls["moon_now"] += 1
         return {
@@ -106,6 +126,11 @@ def test_astronomy_summary_reuses_daily_bundles_across_sun_path_variants(
         "_build_sun_path_samples",
         fake_build_sun_path_samples,
     )
+    monkeypatch.setattr(
+        astronomy,
+        "_build_moon_path_samples",
+        fake_build_moon_path_samples,
+    )
     monkeypatch.setattr(astronomy, "moon_now", fake_moon_now)
     monkeypatch.setattr(astronomy, "_sun_geometry", fake_sun_geometry)
 
@@ -131,15 +156,22 @@ def test_astronomy_summary_reuses_daily_bundles_across_sun_path_variants(
         "sun_events": 3,
         "twilight": 3,
         "sun_path": 2,
+        "moon_path": 2,
         "moon_now": 2,
         "sun_current": 2,
     }
     assert summary_default["meta"]["cache_key"] == summary_dense["meta"]["cache_key"]
+    assert summary_default["moon"]["path"]["sample_count"] == 220
+    assert summary_dense["moon"]["path"]["sample_count"] == 180
     assert summary_default["sun"]["path"]["sample_count"] == 220
     assert summary_dense["sun"]["path"]["sample_count"] == 180
     assert (
         summary_default["meta"]["performance"]["cache_keys"]["summary_bundle"]
         == summary_default["meta"]["cache_key"]
+    )
+    assert (
+        summary_default["meta"]["performance"]["cache_keys"]["moon_path"]
+        != summary_dense["meta"]["performance"]["cache_keys"]["moon_path"]
     )
     assert (
         summary_default["meta"]["performance"]["cache_keys"]["sun_path"]
@@ -148,3 +180,90 @@ def test_astronomy_summary_reuses_daily_bundles_across_sun_path_variants(
 
     astronomy._daily_bundle_cached.cache_clear()
     astronomy._sun_path_cached.cache_clear()
+    astronomy._moon_path_cached.cache_clear()
+
+
+def test_build_moon_path_samples_returns_sorted_altitude_and_azimuth_samples(
+    monkeypatch,
+) -> None:
+    class FakeAngleArray:
+        def __init__(self, degrees):
+            self.degrees = degrees
+
+    class FakeApparent:
+        def apparent(self):
+            return self
+
+        def altaz(self, temperature_C, pressure_mbar):
+            assert temperature_C == 10.0
+            assert pressure_mbar == 1010.0
+            return (
+                FakeAngleArray([-5.0, 0.25, 12.0, 3.5, -7.0]),
+                FakeAngleArray([80.0, 95.0, 140.0, 220.0, 275.0]),
+                None,
+            )
+
+    class FakeObserver:
+        def at(self, times):
+            assert len(times) == 5
+            return self
+
+        def observe(self, body):
+            assert body == "moon"
+            return FakeApparent()
+
+    class FakeEarth:
+        def __add__(self, other):
+            return FakeObserver()
+
+    class FakeTimescale:
+        def from_datetimes(self, values):
+            return values
+
+    class FakeRuntime:
+        ts = FakeTimescale()
+        earth = FakeEarth()
+        moon = "moon"
+
+    monkeypatch.setattr(astronomy, "get_runtime", lambda: FakeRuntime())
+
+    path = astronomy._build_moon_path_samples(
+        lat_deg=40.7128,
+        lon_deg=-74.006,
+        elev_m=0.0,
+        target_date=date(2026, 3, 28),
+        tz_local=timezone.utc,
+        sample_count=5,
+    )
+
+    assert path["window_start_local"] == "2026-03-28T00:00:00+00:00"
+    assert path["window_end_local"] == "2026-03-29T00:00:00+00:00"
+    assert path["sample_count"] == 5
+    assert [sample["time_utc"] for sample in path["samples"]] == [
+        "2026-03-28T00:00:00Z",
+        "2026-03-28T06:00:00Z",
+        "2026-03-28T12:00:00Z",
+        "2026-03-28T18:00:00Z",
+        "2026-03-29T00:00:00Z",
+    ]
+    assert [sample["altitude_deg"] for sample in path["samples"]] == [
+        -5.0,
+        0.25,
+        12.0,
+        3.5,
+        -7.0,
+    ]
+    assert [sample["azimuth_deg"] for sample in path["samples"]] == [
+        80.0,
+        95.0,
+        140.0,
+        220.0,
+        275.0,
+    ]
+    assert [sample["above_horizon"] for sample in path["samples"]] == [
+        False,
+        True,
+        True,
+        True,
+        False,
+    ]

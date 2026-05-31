@@ -18,6 +18,8 @@ from app.python_service.mooncard_contract import (
     MOONCARD_DATA_VERSION,
     MoonCardLocationModel,
     MoonCardMoonDataModel,
+    MoonCardMoonPathModel,
+    MoonCardMoonPathSampleModel,
     MoonCardRequestedDatetimeModel,
     MoonCardResponseMetaModel,
     MoonCardResponseModel,
@@ -63,6 +65,35 @@ def _build_empty_twilight_data() -> MoonCardTwilightDataModel:
 
 def _build_empty_visibility_data() -> MoonCardVisibilityDataModel:
     return MoonCardVisibilityDataModel()
+
+
+def _build_moon_path_data(summary: dict) -> MoonCardMoonPathModel | None:
+    path = summary.get("moon", {}).get("path")
+    if not isinstance(path, dict):
+        return None
+
+    raw_samples = path.get("samples")
+    if not isinstance(raw_samples, list):
+        raw_samples = []
+
+    samples = [
+        MoonCardMoonPathSampleModel(
+            time_utc=sample.get("time_utc"),
+            time_local=sample.get("time_local"),
+            altitude_deg=sample.get("altitude_deg"),
+            azimuth_deg=sample.get("azimuth_deg"),
+            above_horizon=sample.get("above_horizon"),
+        )
+        for sample in raw_samples
+        if isinstance(sample, dict)
+    ]
+
+    return MoonCardMoonPathModel(
+        window_start_local=path.get("window_start_local"),
+        window_end_local=path.get("window_end_local"),
+        sample_count=path.get("sample_count", len(samples)),
+        samples=samples,
+    )
 
 
 def _build_visibility_data(current_phase: str | None) -> MoonCardVisibilityDataModel:
@@ -169,6 +200,7 @@ def build_mooncard_response(
                 moonset=summary["moon"]["events"].get("set_local"),
                 high_moon=summary["moon"]["events"].get("high_moon_local"),
                 low_moon=summary["moon"]["events"].get("low_moon_local"),
+                path=_build_moon_path_data(summary),
             )
             if request.include_moon
             else _build_empty_moon_data()

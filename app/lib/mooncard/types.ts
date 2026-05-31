@@ -66,6 +66,21 @@ export interface MoonCardResponseMeta {
   units: MoonCardUnits;
 }
 
+export interface MoonCardMoonPathSample {
+  time_utc: string;
+  time_local: string;
+  altitude_deg: number;
+  azimuth_deg: number;
+  above_horizon: boolean;
+}
+
+export interface MoonCardMoonPathData {
+  window_start_local: string;
+  window_end_local: string;
+  sample_count: number;
+  samples: MoonCardMoonPathSample[];
+}
+
 export interface MoonCardMoonData {
   phase_name: string | null;
   phase_angle_deg: number | null;
@@ -79,6 +94,7 @@ export interface MoonCardMoonData {
   moonset: string | null;
   high_moon: string | null;
   low_moon: string | null;
+  path: MoonCardMoonPathData | null;
 }
 
 export interface MoonCardSunData {

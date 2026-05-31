@@ -21,6 +21,7 @@ DEFAULT_SUN_PATH_SAMPLES = 220
 DEFAULT_PHASE_WINDOW_DAYS = 35
 DAILY_BUNDLE_CACHE_SIZE = 1024
 SUN_PATH_CACHE_SIZE = 256
+MOON_PATH_CACHE_SIZE = 256
 
 
 MAJOR_PHASES: Dict[int, Dict[str, Any]] = {
@@ -126,6 +127,20 @@ def _sun_path_cache_key(
 ) -> str:
     return (
         f"astronomy-sun-path:{lat_key}:{lon_key}:{elev_key}:"
+        f"{tz_name}:{date_iso}:{sample_count}"
+    )
+
+
+def _moon_path_cache_key(
+    lat_key: float,
+    lon_key: float,
+    elev_key: float,
+    tz_name: str,
+    date_iso: str,
+    sample_count: int,
+) -> str:
+    return (
+        f"astronomy-moon-path:{lat_key}:{lon_key}:{elev_key}:"
         f"{tz_name}:{date_iso}:{sample_count}"
     )
 
@@ -297,6 +312,82 @@ def _build_sun_path_samples(
     }
 
 
+def _moon_path_window(
+    target_date: date,
+    tz_local,
+) -> tuple[datetime, datetime]:
+    # The frontend chart uses the full local calendar day as its visible window.
+    # Sampling the Moon across that same day keeps the path stable when rise/set
+    # straddle midnight or when the Moon stays above/below the horizon for long
+    # stretches.
+    window_start_local = datetime(
+        target_date.year,
+        target_date.month,
+        target_date.day,
+        0,
+        0,
+        tzinfo=tz_local,
+    )
+    return window_start_local, window_start_local + timedelta(days=1)
+
+
+def _build_moon_path_samples(
+    lat_deg: float,
+    lon_deg: float,
+    elev_m: float,
+    target_date: date,
+    tz_local,
+    sample_count: int,
+) -> Dict[str, Any]:
+    count = max(2, int(sample_count))
+    window_start_local, window_end_local = _moon_path_window(
+        target_date,
+        tz_local,
+    )
+    start_utc = window_start_local.astimezone(timezone.utc)
+    end_utc = window_end_local.astimezone(timezone.utc)
+    total_seconds = max(1.0, (end_utc - start_utc).total_seconds())
+    runtime = get_runtime()
+    observer = runtime.earth + wgs84.latlon(lat_deg, lon_deg, elevation_m=elev_m)
+    sample_utc_values = [
+        start_utc + timedelta(seconds=total_seconds * (idx / (count - 1)))
+        for idx in range(count)
+    ]
+    sample_local_values = [sample_utc.astimezone(tz_local) for sample_utc in sample_utc_values]
+    apparent_moon = observer.at(runtime.ts.from_datetimes(sample_utc_values)).observe(
+        runtime.moon
+    ).apparent()
+    altitudes, azimuths, _distance = apparent_moon.altaz(
+        temperature_C=10.0,
+        pressure_mbar=1010.0,
+    )
+
+    samples: List[Dict[str, Any]] = []
+    for sample_utc, sample_local, altitude_deg, azimuth_deg in zip(
+        sample_utc_values,
+        sample_local_values,
+        altitudes.degrees,
+        azimuths.degrees,
+    ):
+        altitude_value = float(altitude_deg)
+        samples.append(
+            {
+                "time_utc": _to_iso_utc(sample_utc),
+                "time_local": _to_iso_local(sample_local),
+                "altitude_deg": altitude_value,
+                "azimuth_deg": float(azimuth_deg),
+                "above_horizon": altitude_value >= 0.0,
+            }
+        )
+
+    return {
+        "window_start_local": _to_iso_local(window_start_local),
+        "window_end_local": _to_iso_local(window_end_local),
+        "sample_count": count,
+        "samples": samples,
+    }
+
+
 def _twilight_payload(base: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "timezone_offset": base["timezoneOffset"],
@@ -431,6 +522,27 @@ def _sun_path_cached(
     )
 
 
+@lru_cache(maxsize=MOON_PATH_CACHE_SIZE)
+def _moon_path_cached(
+    lat_key: float,
+    lon_key: float,
+    elev_key: float,
+    tz_name: str,
+    date_iso: str,
+    sample_count: int,
+) -> Dict[str, Any]:
+    tz_local = resolve_tz(tz_name, lon_key)
+    target_date = date.fromisoformat(date_iso)
+    return _build_moon_path_samples(
+        lat_deg=lat_key,
+        lon_deg=lon_key,
+        elev_m=elev_key,
+        target_date=target_date,
+        tz_local=tz_local,
+        sample_count=sample_count,
+    )
+
+
 def _build_context(
     lat_deg: float,
     lon_deg: float,
@@ -525,6 +637,17 @@ def astronomy_summary(
         context["local_date"],
         sample_count,
     )
+    moon_path, cache_details["moon_path"] = _run_cached_timed(
+        timings,
+        "moon_path_ms",
+        _moon_path_cached,
+        context["lat_key"],
+        context["lon_key"],
+        context["elev_key"],
+        context["timezone"],
+        context["local_date"],
+        sample_count,
+    )
 
     moon_current = _run_timed(
         timings,
@@ -596,6 +719,14 @@ def astronomy_summary(
                 "timings_ms": {},
                 "cache_keys": {
                     "summary_bundle": cache_key,
+                    "moon_path": _moon_path_cache_key(
+                        context["lat_key"],
+                        context["lon_key"],
+                        context["elev_key"],
+                        context["timezone"],
+                        context["local_date"],
+                        sample_count,
+                    ),
                     "sun_path": _sun_path_cache_key(
                         context["lat_key"],
                         context["lon_key"],
@@ -648,6 +779,7 @@ def astronomy_summary(
                 "previous_day": previous_moon,
                 "next_day": next_moon,
             },
+            "path": moon_path,
         },
         "sun": {
             "current": {

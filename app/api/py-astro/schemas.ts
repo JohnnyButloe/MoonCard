@@ -56,6 +56,20 @@ export const AstronomySummarySchema = z.object({
       previous_day: AstronomyMoonEventSetSchema,
       next_day: AstronomyMoonEventSetSchema,
     }),
+    path: z.object({
+      window_start_local: z.string().min(1),
+      window_end_local: z.string().min(1),
+      sample_count: z.number().int().min(2),
+      samples: z.array(
+        z.object({
+          time_utc: z.string().min(1),
+          time_local: z.string().min(1),
+          altitude_deg: z.number(),
+          azimuth_deg: z.number(),
+          above_horizon: z.boolean(),
+        }),
+      ),
+    }),
   }),
   sun: z.object({
     current: z.object({

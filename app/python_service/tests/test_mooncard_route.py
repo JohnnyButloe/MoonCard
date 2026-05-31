@@ -49,7 +49,38 @@ def test_mooncard_route_returns_canonical_response(monkeypatch) -> None:
             timestamp_iso="2026-04-03T01:30:00Z",
             units=MoonCardUnitsModel(),
         ),
-        moon=MoonCardMoonDataModel(phase_name="Waxing Gibbous", is_up=True),
+        moon=MoonCardMoonDataModel(
+            phase_name="Waxing Gibbous",
+            is_up=True,
+            path={
+                "window_start_local": "2026-04-02T00:00:00-04:00",
+                "window_end_local": "2026-04-03T00:00:00-04:00",
+                "sample_count": 3,
+                "samples": [
+                    {
+                        "time_utc": "2026-04-02T04:00:00Z",
+                        "time_local": "2026-04-02T00:00:00-04:00",
+                        "altitude_deg": -8.5,
+                        "azimuth_deg": 93.2,
+                        "above_horizon": False,
+                    },
+                    {
+                        "time_utc": "2026-04-02T16:00:00Z",
+                        "time_local": "2026-04-02T12:00:00-04:00",
+                        "altitude_deg": 41.3,
+                        "azimuth_deg": 181.9,
+                        "above_horizon": True,
+                    },
+                    {
+                        "time_utc": "2026-04-03T04:00:00Z",
+                        "time_local": "2026-04-03T00:00:00-04:00",
+                        "altitude_deg": -12.4,
+                        "azimuth_deg": 271.2,
+                        "above_horizon": False,
+                    },
+                ],
+            },
+        ),
         sun=MoonCardSunDataModel(is_up=False),
         twilight=MoonCardTwilightDataModel(current_phase="astronomical"),
         visibility=MoonCardVisibilityDataModel(

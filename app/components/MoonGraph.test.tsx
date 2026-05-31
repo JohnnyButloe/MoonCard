@@ -21,8 +21,12 @@ vi.mock("../hooks/useWeather", () => ({
 }));
 
 import MoonAltitudeGraph, {
-  buildCyclePosition,
+  buildAltitudePlotPoints,
+  buildMoonVisualOrbitPath,
+  buildMoonAltitudeScale,
   buildOrbitCurveY,
+  getMoonVisualYForMs,
+  interpolatePlotPointAtMs,
 } from "./MoonGraph";
 
 describe("MoonGraph", () => {
@@ -46,7 +50,7 @@ describe("MoonGraph", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the timeline with sunrise and sunset details", () => {
+  it("renders the chart chrome with the twilight badge and updated label", () => {
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
         data: buildCanonicalMoonCardResponse(),
@@ -59,10 +63,6 @@ describe("MoonGraph", () => {
     expect(screen.getByText("Moon/Sun altitude")).toBeInTheDocument();
     expect(screen.getByText("Twilight Astronomical")).toBeInTheDocument();
     expect(screen.getByText("Updated 6:35 AM")).toBeInTheDocument();
-    expect(screen.getByText("Sunrise")).toBeInTheDocument();
-    expect(screen.getAllByText("6:42 AM")).toHaveLength(2);
-    expect(screen.getByText("Sunset")).toBeInTheDocument();
-    expect(screen.getByText("7:15 PM")).toBeInTheDocument();
   });
 
   it("keeps rendering cached data when the timeline refresh fails", () => {
@@ -81,16 +81,12 @@ describe("MoonGraph", () => {
     expect(screen.getByText("Moon/Sun altitude")).toBeInTheDocument();
   });
 
-  it("renders partial timeline data null-safely", () => {
+  it("renders partial timeline data null-safely when Moon samples are missing", () => {
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
         data: buildCanonicalMoonCardResponse({
-          sun: {
-            sunrise: null,
-            sunset: null,
-          },
-          twilight: {
-            segments: [],
+          moon: {
+            path: null,
           },
         }),
       }),
@@ -101,98 +97,322 @@ describe("MoonGraph", () => {
     expect(
       screen.getByText("Timeline is using partial astronomy data."),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getByText("Moon/Sun altitude")).toBeInTheDocument();
   });
 
-  it("maps orbit timing onto the real day so rise and set still hit the horizon", () => {
-    const summary = buildCanonicalMoonCardResponse();
+  it("maps real Moon samples onto the chart time and horizon scale in sorted order", () => {
     const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
     const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
-    const sunriseMs = Date.parse("2026-04-05T06:42:00Z");
-    const sunsetMs = Date.parse("2026-04-05T19:15:00Z");
-    const risePhase = buildCyclePosition({
-      nowMs: sunriseMs,
+    const points = buildAltitudePlotPoints({
       dayStartMs,
       dayEndMs,
-      riseMs: sunriseMs,
-      setMs: sunsetMs,
-      isUp: summary.sun.is_up,
+      samples: [
+        {
+          time_utc: "2026-04-05T12:00:00Z",
+          altitude_deg: 43,
+          azimuth_deg: 180,
+          above_horizon: true,
+        },
+        {
+          time_utc: "2026-04-05T00:00:00Z",
+          altitude_deg: -12,
+          azimuth_deg: 90,
+          above_horizon: false,
+        },
+        {
+          time_utc: "2026-04-05T06:00:00Z",
+          altitude_deg: 0,
+          azimuth_deg: 110,
+          above_horizon: true,
+        },
+      ],
     });
-    const setPhase = buildCyclePosition({
-      nowMs: sunsetMs,
+
+    expect(points.map((point) => point.ms)).toEqual([
+      Date.parse("2026-04-05T00:00:00Z"),
+      Date.parse("2026-04-05T06:00:00Z"),
+      Date.parse("2026-04-05T12:00:00Z"),
+    ]);
+    expect(points[0]?.y).toBeGreaterThan(21);
+    expect(points[1]?.y).toBeCloseTo(21, 5);
+    expect(points[2]?.y).toBeLessThan(21);
+  });
+
+  it("keeps real Moon samples parsed for future hover lookup", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const points = buildAltitudePlotPoints({
       dayStartMs,
       dayEndMs,
-      riseMs: sunriseMs,
-      setMs: sunsetMs,
-      isUp: summary.sun.is_up,
+      samples: [
+        {
+          time_utc: "2026-04-05T00:00:00Z",
+          altitude_deg: -18,
+          azimuth_deg: 90,
+          above_horizon: false,
+        },
+        {
+          time_utc: "2026-04-05T12:00:00Z",
+          altitude_deg: 18,
+          azimuth_deg: 180,
+          above_horizon: true,
+        },
+      ],
     });
+    const marker = interpolatePlotPointAtMs(
+      points,
+      Date.parse("2026-04-05T06:00:00Z"),
+    );
+
+    expect(marker).not.toBeNull();
+    expect(marker?.x).toBeCloseTo((points[0].x + points[1].x) / 2, 5);
+    expect(marker?.y).toBeCloseTo((points[0].y + points[1].y) / 2, 5);
+    expect(points[0]).toMatchObject({
+      altitudeDeg: -18,
+      azimuthDeg: 90,
+      aboveHorizon: false,
+    });
+    expect(points[1]).toMatchObject({
+      altitudeDeg: 18,
+      azimuthDeg: 180,
+      aboveHorizon: true,
+    });
+  });
+
+  it("builds a Moon visual curve that crosses the horizon at moonrise and moonset", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const riseMs = Date.parse("2026-04-05T02:00:00Z");
+    const setMs = Date.parse("2026-04-05T14:00:00Z");
+
+    expect(
+      getMoonVisualYForMs({
+        targetMs: riseMs,
+        dayStartMs,
+        dayEndMs,
+        riseMs,
+        setMs,
+        peakMs: null,
+        isUp: false,
+      }),
+    ).toBeCloseTo(21, 5);
+    expect(
+      getMoonVisualYForMs({
+        targetMs: setMs,
+        dayStartMs,
+        dayEndMs,
+        riseMs,
+        setMs,
+        peakMs: null,
+        isUp: false,
+      }),
+    ).toBeCloseTo(21, 5);
+  });
+
+  it("keeps the Moon visual curve above the horizon between rise and set", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const riseMs = Date.parse("2026-04-05T02:00:00Z");
+    const setMs = Date.parse("2026-04-05T14:00:00Z");
+    const midArcY = getMoonVisualYForMs({
+      targetMs: Date.parse("2026-04-05T08:00:00Z"),
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: null,
+      isUp: true,
+    });
+
+    expect(midArcY).toBeLessThan(21);
+  });
+
+  it("biases the Moon visual arc upward near high moon when that time is available", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const riseMs = Date.parse("2026-04-05T02:00:00Z");
+    const setMs = Date.parse("2026-04-05T14:00:00Z");
+    const highMoonMs = Date.parse("2026-04-05T07:00:00Z");
+    const nearHighMoonY = getMoonVisualYForMs({
+      targetMs: highMoonMs,
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: highMoonMs,
+      isUp: true,
+    });
+    const lateArcY = getMoonVisualYForMs({
+      targetMs: Date.parse("2026-04-05T11:00:00Z"),
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: highMoonMs,
+      isUp: true,
+    });
+
+    expect(nearHighMoonY).toBeLessThan(lateArcY);
+    expect(nearHighMoonY).toBeLessThan(21);
+  });
+
+  it("falls back to a midpoint peak when high moon is missing", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const riseMs = Date.parse("2026-04-05T02:00:00Z");
+    const setMs = Date.parse("2026-04-05T14:00:00Z");
+    const midpointMs = riseMs + (setMs - riseMs) / 2;
+    const midpointY = getMoonVisualYForMs({
+      targetMs: midpointMs,
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: null,
+      isUp: true,
+    });
+    const shoulderY = getMoonVisualYForMs({
+      targetMs: Date.parse("2026-04-05T05:00:00Z"),
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: null,
+      isUp: true,
+    });
+
+    expect(midpointY).toBeLessThan(shoulderY);
+    expect(midpointY).toBeLessThan(21);
+  });
+
+  it("uses the same Moon visual y function for the marker as for the rendered path", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
+    const riseMs = Date.parse("2026-04-05T02:00:00Z");
+    const setMs = Date.parse("2026-04-05T14:00:00Z");
+    const targetMs = Date.parse("2026-04-05T09:00:00Z");
+    const expectedY = getMoonVisualYForMs({
+      targetMs,
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: Date.parse("2026-04-05T08:00:00Z"),
+      isUp: true,
+    });
+    const path = buildMoonVisualOrbitPath({
+      dayStartMs,
+      dayEndMs,
+      riseMs,
+      setMs,
+      peakMs: Date.parse("2026-04-05T08:00:00Z"),
+      isUp: true,
+      samples: 220,
+    });
+    const targetX = ((targetMs - dayStartMs) / (dayEndMs - dayStartMs)) * 160;
+    const pathPoint = path
+      .split("L ")
+      .map((segment) => segment.replace(/^M /, "").trim())
+      .map((segment) => segment.split(",").map(Number))
+      .find(([x]) => Math.abs(x - targetX) < 0.5);
+
+    expect(pathPoint).toBeDefined();
+    expect(Math.abs((pathPoint?.[1] ?? 0) - expectedY)).toBeLessThan(0.1);
+  });
+
+  it("keeps the synthetic Sun orbit helper aligned to the horizon at rise and set", () => {
+    const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
+    const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
     const middayY = buildOrbitCurveY({
       nowMs: Date.parse("2026-04-05T12:00:00Z"),
       dayStartMs,
       dayEndMs,
-      riseMs: sunriseMs,
-      setMs: sunsetMs,
-      isUp: summary.sun.is_up,
+      riseMs: Date.parse("2026-04-05T06:42:00Z"),
+      setMs: Date.parse("2026-04-05T19:15:00Z"),
+      isUp: false,
     });
     const sunriseY = buildOrbitCurveY({
-      nowMs: sunriseMs,
+      nowMs: Date.parse("2026-04-05T06:42:00Z"),
       dayStartMs,
       dayEndMs,
-      riseMs: sunriseMs,
-      setMs: sunsetMs,
-      isUp: summary.sun.is_up,
+      riseMs: Date.parse("2026-04-05T06:42:00Z"),
+      setMs: Date.parse("2026-04-05T19:15:00Z"),
+      isUp: false,
     });
     const sunsetY = buildOrbitCurveY({
-      nowMs: sunsetMs,
+      nowMs: Date.parse("2026-04-05T19:15:00Z"),
       dayStartMs,
       dayEndMs,
-      riseMs: sunriseMs,
-      setMs: sunsetMs,
-      isUp: summary.sun.is_up,
+      riseMs: Date.parse("2026-04-05T06:42:00Z"),
+      setMs: Date.parse("2026-04-05T19:15:00Z"),
+      isUp: false,
     });
 
-    expect(risePhase).toBeCloseTo(0.25, 5);
-    expect(setPhase).toBeCloseTo(0.75, 5);
     expect(sunriseY).toBeCloseTo(21, 5);
     expect(sunsetY).toBeCloseTo(21, 5);
     expect(middayY).toBeLessThan(21);
   });
 
-  it("supports wrap-around moon timing when moonset happens before moonrise", () => {
+  it("keeps the altitude scale horizon-aware for above- and below-horizon values", () => {
+    const moonAltitudeToY = buildMoonAltitudeScale([
+      {
+        time_utc: "2026-04-05T00:00:00Z",
+        altitude_deg: -5,
+        azimuth_deg: 90,
+        above_horizon: false,
+      },
+      {
+        time_utc: "2026-04-05T06:00:00Z",
+        altitude_deg: -25,
+        azimuth_deg: 100,
+        above_horizon: false,
+      },
+      {
+        time_utc: "2026-04-05T12:00:00Z",
+        altitude_deg: 35,
+        azimuth_deg: 180,
+        above_horizon: true,
+      },
+    ]);
+
+    expect(moonAltitudeToY(0)).toBeCloseTo(21, 5);
+    expect(moonAltitudeToY(35)).toBeLessThan(21);
+    expect(moonAltitudeToY(-5)).toBeGreaterThan(21);
+    expect(moonAltitudeToY(-25)).toBeGreaterThan(moonAltitudeToY(-5));
+    expect(moonAltitudeToY(-25)).toBeLessThan(36);
+  });
+
+  it("keeps deep negative Moon samples visually distinct instead of flattening them", () => {
     const dayStartMs = Date.parse("2026-04-05T00:00:00Z");
     const dayEndMs = Date.parse("2026-04-06T00:00:00Z");
-    const moonsetMs = Date.parse("2026-04-05T06:00:00Z");
-    const moonriseMs = Date.parse("2026-04-05T18:00:00Z");
-
-    const morningPhase = buildCyclePosition({
-      nowMs: Date.parse("2026-04-05T03:00:00Z"),
+    const points = buildAltitudePlotPoints({
       dayStartMs,
       dayEndMs,
-      riseMs: moonriseMs,
-      setMs: moonsetMs,
-      isUp: true,
-    });
-    const daytimePhase = buildCyclePosition({
-      nowMs: Date.parse("2026-04-05T12:00:00Z"),
-      dayStartMs,
-      dayEndMs,
-      riseMs: moonriseMs,
-      setMs: moonsetMs,
-      isUp: false,
-    });
-    const eveningPhase = buildCyclePosition({
-      nowMs: Date.parse("2026-04-05T21:00:00Z"),
-      dayStartMs,
-      dayEndMs,
-      riseMs: moonriseMs,
-      setMs: moonsetMs,
-      isUp: true,
+      samples: [
+        {
+          time_utc: "2026-04-05T00:00:00Z",
+          altitude_deg: -5,
+          azimuth_deg: 90,
+          above_horizon: false,
+        },
+        {
+          time_utc: "2026-04-05T06:00:00Z",
+          altitude_deg: -25,
+          azimuth_deg: 100,
+          above_horizon: false,
+        },
+        {
+          time_utc: "2026-04-05T12:00:00Z",
+          altitude_deg: 35,
+          azimuth_deg: 180,
+          above_horizon: true,
+        },
+      ],
     });
 
-    expect(morningPhase).toBeGreaterThan(0.5);
-    expect(morningPhase).toBeLessThan(0.75);
-    expect(daytimePhase).toBeGreaterThan(0.75);
-    expect(eveningPhase).toBeGreaterThan(0.25);
-    expect(eveningPhase).toBeLessThan(0.5);
+    expect(points[0]?.y).toBeGreaterThan(21);
+    expect(points[1]?.y).toBeGreaterThan(points[0]?.y);
+    expect(points[1]?.y).toBeLessThan(36);
+    expect(points[2]?.y).toBeLessThan(21);
   });
 });

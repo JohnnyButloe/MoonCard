@@ -26,6 +26,16 @@ const VIEW_W = 160;
 const VIEW_H = 36;
 const HORIZON_Y = 21;
 const AMP = 12;
+const MOON_VISUAL_PEAK_Y = 8;
+const MOON_VISUAL_TROUGH_Y = 33;
+const MOON_VISUAL_SAMPLES = 220;
+const MOON_PLOT_TOP_Y = 2;
+const MOON_PLOT_BOTTOM_Y = VIEW_H - 2;
+const MIN_MOON_ABOVE_ALTITUDE = 20;
+const MIN_MOON_BELOW_MAGNITUDE = 12;
+const MOON_ABOVE_HORIZON_BOOST_EXPONENT = 0.65;
+const MOON_BELOW_HORIZON_COMPRESS_EXPONENT = 0.9;
+
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
 
 type SkyStripe = {
@@ -38,6 +48,26 @@ type TwilightBand = {
   startMs: number;
   endMs: number;
   phase: TwilightPhase;
+};
+
+type TimedAltitudeSample = {
+  time_utc: string;
+  altitude_deg: number;
+  azimuth_deg: number;
+  above_horizon: boolean;
+};
+
+type AltitudePlotPoint = {
+  ms: number;
+  x: number;
+  y: number;
+  altitudeDeg: number;
+  azimuthDeg: number;
+  aboveHorizon: boolean;
+};
+
+type ValidTimedAltitudeSample = TimedAltitudeSample & {
+  ms: number;
 };
 
 const TWILIGHT_BAND_COLOR: Record<TwilightPhase, string> = {
@@ -140,6 +170,56 @@ function normalizeTwilightPhase(phase?: string | null): TwilightPhase {
   }
 }
 
+export function buildMoonAltitudeScale(samples: TimedAltitudeSample[]) {
+  const positiveAltitudes = samples
+    .map((sample) => sample.altitude_deg)
+    .filter(
+      (altitude): altitude is number =>
+        Number.isFinite(altitude) && altitude > 0,
+    );
+
+  const negativeMagnitudes = samples
+    .map((sample) => sample.altitude_deg)
+    .filter(
+      (altitude): altitude is number =>
+        Number.isFinite(altitude) && altitude < 0,
+    )
+    .map((altitude) => Math.abs(altitude));
+
+  const maxAboveAltitude =
+    positiveAltitudes.length > 0
+      ? Math.max(MIN_MOON_ABOVE_ALTITUDE, ...positiveAltitudes)
+      : MIN_MOON_ABOVE_ALTITUDE;
+  const maxBelowMagnitude =
+    negativeMagnitudes.length > 0
+      ? Math.max(MIN_MOON_BELOW_MAGNITUDE, ...negativeMagnitudes)
+      : MIN_MOON_BELOW_MAGNITUDE;
+
+  return function moonAltitudeToY(altitudeDeg: number) {
+    if (!Number.isFinite(altitudeDeg)) {
+      return HORIZON_Y;
+    }
+
+    if (altitudeDeg >= 0) {
+      const normalized = clamp01(altitudeDeg / maxAboveAltitude);
+      const boosted = Math.pow(
+        normalized,
+        MOON_ABOVE_HORIZON_BOOST_EXPONENT,
+      );
+
+      return HORIZON_Y - boosted * (HORIZON_Y - MOON_PLOT_TOP_Y);
+    }
+
+    const normalized = clamp01(Math.abs(altitudeDeg) / maxBelowMagnitude);
+    const compressed = Math.pow(
+      normalized,
+      MOON_BELOW_HORIZON_COMPRESS_EXPONENT,
+    );
+
+    return HORIZON_Y + compressed * (MOON_PLOT_BOTTOM_Y - HORIZON_Y);
+  };
+}
+
 function yOnCurve(t: number) {
   return HORIZON_Y - AMP * Math.sin(2 * Math.PI * t - Math.PI / 2);
 }
@@ -181,6 +261,231 @@ function nextDateIso(dateIso: string): string {
 function timeToX(ms: number, dayStartMs: number, dayEndMs: number): number {
   const span = Math.max(1, dayEndMs - dayStartMs);
   return clamp01((ms - dayStartMs) / span) * VIEW_W;
+}
+
+export function buildAltitudePlotPoints(input: {
+  samples: TimedAltitudeSample[] | null | undefined;
+  dayStartMs: number;
+  dayEndMs: number;
+}): AltitudePlotPoint[] {
+  if (!Array.isArray(input.samples)) {
+    return [];
+  }
+
+  const validSamples = input.samples
+    .map((sample) => {
+      const ms = toUtcMs(sample.time_utc);
+      if (
+        ms === null ||
+        ms < input.dayStartMs ||
+        ms > input.dayEndMs ||
+        !Number.isFinite(sample.altitude_deg) ||
+        !Number.isFinite(sample.azimuth_deg) ||
+        typeof sample.above_horizon !== "boolean"
+      ) {
+        return null;
+      }
+
+      return {
+        ms,
+        ...sample,
+      };
+    })
+    .filter(
+      (sample): sample is ValidTimedAltitudeSample => sample !== null,
+    )
+    .sort((a, b) => a.ms - b.ms);
+
+  const uniqueSamples: ValidTimedAltitudeSample[] = [];
+  for (const sample of validSamples) {
+    const previousSample = uniqueSamples.at(-1);
+    if (previousSample && previousSample.ms === sample.ms) {
+      uniqueSamples[uniqueSamples.length - 1] = sample;
+      continue;
+    }
+    uniqueSamples.push(sample);
+  }
+
+  const moonAltitudeToY = buildMoonAltitudeScale(uniqueSamples);
+
+  return uniqueSamples.map((sample) => ({
+    ms: sample.ms,
+    x: timeToX(sample.ms, input.dayStartMs, input.dayEndMs),
+    y: moonAltitudeToY(sample.altitude_deg),
+    altitudeDeg: sample.altitude_deg,
+    azimuthDeg: sample.azimuth_deg,
+    aboveHorizon: sample.above_horizon,
+  }));
+}
+
+function easeInOutSine(progress: number) {
+  return -(Math.cos(Math.PI * clamp01(progress)) - 1) / 2;
+}
+
+function buildMoonVisualCycleState(input: {
+  targetMs: number;
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number;
+  setMs: number;
+  peakMs: number;
+}) {
+  const { targetMs, dayStartMs, dayEndMs, riseMs, setMs, peakMs } = input;
+
+  if (targetMs >= riseMs && targetMs <= setMs) {
+    const spanMs = Math.max(1, setMs - riseMs);
+    const progress = clamp01((targetMs - riseMs) / spanMs);
+    return {
+      isAboveHorizon: true,
+      progress,
+      normalizedDistanceToPeak:
+        targetMs <= peakMs
+          ? clamp01((peakMs - targetMs) / Math.max(1, peakMs - riseMs))
+          : clamp01((targetMs - peakMs) / Math.max(1, setMs - peakMs)),
+    };
+  }
+
+  if (targetMs < riseMs) {
+    return {
+      isAboveHorizon: false,
+      progress: clamp01((targetMs - dayStartMs) / Math.max(1, riseMs - dayStartMs)),
+      normalizedDistanceToPeak: 0,
+    };
+  }
+
+  return {
+    isAboveHorizon: false,
+    progress: clamp01((targetMs - setMs) / Math.max(1, dayEndMs - setMs)),
+    normalizedDistanceToPeak: 0,
+  };
+}
+
+export function getMoonVisualYForMs(input: {
+  targetMs: number;
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number | null;
+  setMs: number | null;
+  peakMs: number | null;
+  isUp: boolean | null;
+}) {
+  const riseMs =
+    input.riseMs === null
+      ? null
+      : Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.riseMs));
+  const setMs =
+    input.setMs === null
+      ? null
+      : Math.max(input.dayStartMs, Math.min(input.dayEndMs, input.setMs));
+
+  if (riseMs !== null && setMs !== null && setMs > riseMs) {
+    const fallbackPeakMs = riseMs + (setMs - riseMs) / 2;
+    const peakMsRaw = input.peakMs ?? fallbackPeakMs;
+    const peakMs = Math.max(riseMs, Math.min(setMs, peakMsRaw));
+    const state = buildMoonVisualCycleState({
+      targetMs: input.targetMs,
+      dayStartMs: input.dayStartMs,
+      dayEndMs: input.dayEndMs,
+      riseMs,
+      setMs,
+      peakMs,
+    });
+
+    if (state.isAboveHorizon) {
+      const peakHeight = HORIZON_Y - MOON_VISUAL_PEAK_Y;
+      const arcShape = Math.sin(state.progress * Math.PI);
+      const peakBias = 1 - Math.pow(state.normalizedDistanceToPeak, 1.35);
+      const combinedArc = clamp01(arcShape * 0.72 + peakBias * 0.28);
+      return HORIZON_Y - combinedArc * peakHeight;
+    }
+
+    const troughDepth = MOON_VISUAL_TROUGH_Y - HORIZON_Y;
+    const easedProgress = easeInOutSine(state.progress);
+    const belowShape =
+      input.targetMs < riseMs
+        ? Math.sin((1 - easedProgress) * (Math.PI / 2))
+        : Math.sin(easedProgress * (Math.PI / 2));
+    return HORIZON_Y + belowShape * troughDepth;
+  }
+
+  return buildOrbitCurveY({
+    nowMs: input.targetMs,
+    dayStartMs: input.dayStartMs,
+    dayEndMs: input.dayEndMs,
+    riseMs: input.riseMs,
+    setMs: input.setMs,
+    isUp: input.isUp,
+  });
+}
+
+export function buildMoonVisualOrbitPath(input: {
+  dayStartMs: number;
+  dayEndMs: number;
+  riseMs: number | null;
+  setMs: number | null;
+  peakMs: number | null;
+  isUp: boolean | null;
+  samples?: number;
+}) {
+  const samples = input.samples ?? MOON_VISUAL_SAMPLES;
+  let d = "";
+
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples;
+    const ms = lerp(input.dayStartMs, input.dayEndMs, t);
+    const x = timeToX(ms, input.dayStartMs, input.dayEndMs);
+    const y = getMoonVisualYForMs({
+      targetMs: ms,
+      dayStartMs: input.dayStartMs,
+      dayEndMs: input.dayEndMs,
+      riseMs: input.riseMs,
+      setMs: input.setMs,
+      peakMs: input.peakMs,
+      isUp: input.isUp,
+    });
+    d += `${i === 0 ? "M" : "L"} ${formatPathNumber(x)},${formatPathNumber(y)} `;
+  }
+
+  return d.trim();
+}
+
+export function interpolatePlotPointAtMs(
+  points: AltitudePlotPoint[],
+  targetMs: number,
+) {
+  if (points.length === 0) {
+    return null;
+  }
+
+  if (targetMs <= points[0].ms) {
+    return { x: points[0].x, y: points[0].y };
+  }
+
+  const lastPoint = points.at(-1);
+  if (!lastPoint) {
+    return null;
+  }
+  if (targetMs >= lastPoint.ms) {
+    return { x: lastPoint.x, y: lastPoint.y };
+  }
+
+  for (let index = 1; index < points.length; index += 1) {
+    const previousPoint = points[index - 1];
+    const nextPoint = points[index];
+    if (targetMs > nextPoint.ms) {
+      continue;
+    }
+
+    const spanMs = Math.max(1, nextPoint.ms - previousPoint.ms);
+    const progress = clamp01((targetMs - previousPoint.ms) / spanMs);
+
+    return {
+      x: lerp(previousPoint.x, nextPoint.x, progress),
+      y: lerp(previousPoint.y, nextPoint.y, progress),
+    };
+  }
+
+  return { x: lastPoint.x, y: lastPoint.y };
 }
 
 function buildTwilightBands(input: {
@@ -421,10 +726,25 @@ export default function MoonAltitudeGraph({
   const now = new Date(summary.meta.timestamp_iso);
   const nowMs = now.getTime();
   const hasCanonicalSummaryIssues = summary.errors.length > 0;
+  const localDate = summary.meta.requested_datetime.date;
+  const dayStartMs = fromZonedTime(`${localDate}T00:00:00`, tz).getTime();
+  const dayEndMs = fromZonedTime(
+    `${nextDateIso(localDate)}T00:00:00`,
+    tz,
+  ).getTime();
+  // Keep the real Moon samples parsed and ready for future hover lookup, but
+  // do not let their altitude values control the rendered curve geometry.
+  const moonPathPoints = buildAltitudePlotPoints({
+    samples: summary.moon.path?.samples,
+    dayStartMs,
+    dayEndMs,
+  });
+  const hasRealMoonPath = moonPathPoints.length >= 2;
   const hasPartialTimeline =
     summary.twilight.segments.length === 0 ||
     summary.sun.sunrise === null ||
-    summary.sun.sunset === null;
+    summary.sun.sunset === null ||
+    !hasRealMoonPath;
   const timelineStatus = summaryQ.error
     ? {
         tone: "warning" as const,
@@ -443,13 +763,6 @@ export default function MoonAltitudeGraph({
           }
         : null;
 
-  const localDate = summary.meta.requested_datetime.date;
-  const dayStartMs = fromZonedTime(`${localDate}T00:00:00`, tz).getTime();
-  const dayEndMs = fromZonedTime(
-    `${nextDateIso(localDate)}T00:00:00`,
-    tz,
-  ).getTime();
-
   const twilightPhase = normalizeTwilightPhase(summary.twilight.current_phase);
   const twilightLabel = TWILIGHT_LABEL[twilightPhase];
   const twilightBands = buildTwilightBands({
@@ -465,15 +778,17 @@ export default function MoonAltitudeGraph({
   const sunsetMs = toUtcMs(summary.sun.sunset);
   const moonriseMs = toUtcMs(summary.moon.moonrise);
   const moonsetMs = toUtcMs(summary.moon.moonset);
+  const highMoonMs = toUtcMs(summary.moon.high_moon);
   const nowX = timeToX(nowMs, dayStartMs, dayEndMs);
   const moonDotX = nowX;
   const sunDotX = nowX;
-  const moonDotY = buildOrbitCurveY({
+  const moonDotY = getMoonVisualYForMs({
+    targetMs: nowMs,
     dayStartMs,
     dayEndMs,
-    nowMs,
     riseMs: moonriseMs,
     setMs: moonsetMs,
+    peakMs: highMoonMs,
     isUp: summary.moon.is_up,
   });
   const sunDotY = buildOrbitCurveY({
@@ -494,16 +809,14 @@ export default function MoonAltitudeGraph({
           isUp: summary.sun.is_up,
         })
       : CURVE_PATH;
-  const moonCurvePath =
-    moonriseMs !== null || moonsetMs !== null
-      ? buildTimedOrbitPath({
-          dayStartMs,
-          dayEndMs,
-          riseMs: moonriseMs,
-          setMs: moonsetMs,
-          isUp: summary.moon.is_up,
-        })
-      : CURVE_PATH;
+  const moonCurvePath = buildMoonVisualOrbitPath({
+    dayStartMs,
+    dayEndMs,
+    riseMs: moonriseMs,
+    setMs: moonsetMs,
+    peakMs: highMoonMs,
+    isUp: summary.moon.is_up,
+  });
 
   const skyStripes = buildSkyStripes(twilightBands, dayStartMs, dayEndMs);
   const weatherCondition = weatherQ.data?.condition;
