@@ -12,20 +12,8 @@ import {
   DASHBOARD_METRIC_LABEL_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_SURFACE_CLASS,
+  formatClockTime,
 } from "./moonDashboardShared";
-
-function formatClockTime(iso: string | null | undefined, tz: string): string {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-  }).format(d);
-}
 
 function weatherOutlookLabel(
   condition: WeatherCondition | undefined,
@@ -72,10 +60,10 @@ function buildVisibilitySuggestion({
   const twilightLabel = formatClockTime(relevantTwilight, tz);
 
   if (twilightLabel !== "—") {
-    return `Moon should be visible around nautical twilight at ${twilightLabel}.`;
+    return `The moon may stand out more around nautical twilight at ${twilightLabel}.`;
   }
 
-  return "Moon should be visible around nautical twilight.";
+  return "The moon may stand out more around nautical twilight.";
 }
 
 function buildSkySummary({

@@ -1,5 +1,10 @@
 "use client";
 
+import type {
+  MoonCardMoonData,
+  MoonCardSunData,
+  MoonCardTwilightData,
+} from "../lib/mooncard/types";
 import type { WeatherCondition } from "../providers/weather";
 
 export const DASHBOARD_PAGE_CLASS =
@@ -72,6 +77,34 @@ export type ViewingAssessment = {
   weatherImpact: ViewingWeatherImpact;
 };
 
+export type LunarVisibilityState = {
+  code:
+    | "visible_now"
+    | "likely_visible_near_sunset"
+    | "daylight_limited"
+    | "not_visible"
+    | "status_pending";
+  badge: string;
+  label: string;
+  detail: string;
+  badgeClass: string;
+};
+
+// Below about 8 degrees, haze and horizon clutter make the moon easy to lose
+// even when the sky is otherwise dark.
+const MIN_MOON_ALTITUDE_FOR_DARK_SKY_VISIBILITY_DEG = 8;
+// Thin crescents can still be visible at night, but we keep a small floor to
+// avoid over-promising the faintest cases.
+const MIN_MOON_ILLUMINATION_FOR_DARK_SKY_VISIBILITY_PCT = 6;
+// Once the sun climbs above roughly golden-hour altitude, daytime contrast is
+// usually too low to confidently claim the moon is visible.
+const MAX_SUN_ALTITUDE_FOR_QUALIFIED_DAYLIGHT_VISIBILITY_DEG = 6;
+// Daylight viewing needs the moon comfortably above the horizon haze.
+const MIN_MOON_ALTITUDE_FOR_LOW_SUN_VISIBILITY_DEG = 14;
+// Near sunset, a modestly lit moon is realistic; dimmer crescents are often
+// too subtle to promise in bright sky.
+const MIN_MOON_ILLUMINATION_FOR_LOW_SUN_VISIBILITY_PCT = 18;
+
 export function formatMoonEventDetail(
   event: "moonrise" | "high_moon" | "moonset",
 ): string {
@@ -84,6 +117,310 @@ export function formatMoonEventDetail(
     default:
       return "Highest point in the sky.";
   }
+}
+
+function isFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function resolveLunarVisibilityContext({
+  sunAltitudeDeg,
+  sunIsUp,
+  twilightPhase,
+  isDarkEnoughForViewing,
+}: {
+  sunAltitudeDeg: number | null | undefined;
+  sunIsUp: boolean | null | undefined;
+  twilightPhase: string | null | undefined;
+  isDarkEnoughForViewing: boolean | null | undefined;
+}): "dark" | "low_sun_daylight" | "bright_daylight" | "unknown" {
+  if (isFiniteNumber(sunAltitudeDeg)) {
+    if (sunAltitudeDeg < 0) return "dark";
+    if (sunAltitudeDeg <= MAX_SUN_ALTITUDE_FOR_QUALIFIED_DAYLIGHT_VISIBILITY_DEG) {
+      return "low_sun_daylight";
+    }
+    return "bright_daylight";
+  }
+
+  const normalizedTwilightPhase = (twilightPhase ?? "").toLowerCase();
+  if (
+    normalizedTwilightPhase === "dark" ||
+    normalizedTwilightPhase === "astronomical" ||
+    normalizedTwilightPhase === "nautical" ||
+    normalizedTwilightPhase === "civil"
+  ) {
+    return "dark";
+  }
+
+  if (sunIsUp === false || isDarkEnoughForViewing === true) {
+    return "dark";
+  }
+
+  if (sunIsUp === true || normalizedTwilightPhase === "day") {
+    return "bright_daylight";
+  }
+
+  if (isDarkEnoughForViewing === false) {
+    return "bright_daylight";
+  }
+
+  return "unknown";
+}
+
+function meetsVisibilityThresholds({
+  altitudeDeg,
+  illuminationPercent,
+  minAltitudeDeg,
+  minIlluminationPercent,
+}: {
+  altitudeDeg: number | null | undefined;
+  illuminationPercent: number | null | undefined;
+  minAltitudeDeg: number;
+  minIlluminationPercent: number;
+}) {
+  return (
+    isFiniteNumber(altitudeDeg) &&
+    altitudeDeg >= minAltitudeDeg &&
+    isFiniteNumber(illuminationPercent) &&
+    illuminationPercent >= minIlluminationPercent
+  );
+}
+
+export function getLunarVisibilityState({
+  moon,
+  sun,
+  twilight,
+  isDarkEnoughForViewing,
+}: {
+  moon: Pick<
+    MoonCardMoonData,
+    "is_up" | "altitude_deg" | "illumination_percent"
+  >;
+  sun: Pick<MoonCardSunData, "altitude_deg" | "is_up">;
+  twilight: Pick<MoonCardTwilightData, "current_phase">;
+  isDarkEnoughForViewing: boolean | null | undefined;
+}): LunarVisibilityState {
+  if (moon.is_up === false) {
+    return {
+      code: "not_visible",
+      badge: "Below horizon",
+      label: "Not visible right now",
+      detail: "Moon is below the horizon.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  if (moon.is_up !== true) {
+    return {
+      code: "status_pending",
+      badge: "Status pending",
+      label: "Visibility updating",
+      detail: "Viewing guidance is updating.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  const context = resolveLunarVisibilityContext({
+    sunAltitudeDeg: sun.altitude_deg,
+    sunIsUp: sun.is_up,
+    twilightPhase: twilight.current_phase,
+    isDarkEnoughForViewing,
+  });
+
+  if (
+    context !== "bright_daylight" &&
+    (!isFiniteNumber(moon.altitude_deg) ||
+      !isFiniteNumber(moon.illumination_percent))
+  ) {
+    return {
+      code: "status_pending",
+      badge: "Status pending",
+      label: "Visibility updating",
+      detail: "Viewing guidance is updating.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  if (context === "dark") {
+    if (
+      meetsVisibilityThresholds({
+        altitudeDeg: moon.altitude_deg,
+        illuminationPercent: moon.illumination_percent,
+        minAltitudeDeg: MIN_MOON_ALTITUDE_FOR_DARK_SKY_VISIBILITY_DEG,
+        minIlluminationPercent: MIN_MOON_ILLUMINATION_FOR_DARK_SKY_VISIBILITY_PCT,
+      })
+    ) {
+      return {
+        code: "visible_now",
+        badge: "Visible now",
+        label: "Visible now",
+        detail: "Dark enough to spot if skies are clear.",
+        badgeClass:
+          "border-emerald-300/20 bg-emerald-300/10 text-emerald-100/90",
+      };
+    }
+
+    return {
+      code: "not_visible",
+      badge: "Low contrast",
+      label: "Not visible right now",
+      detail: "Above horizon, but it is still low-contrast right now.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  if (context === "low_sun_daylight") {
+    if (
+      meetsVisibilityThresholds({
+        altitudeDeg: moon.altitude_deg,
+        illuminationPercent: moon.illumination_percent,
+        minAltitudeDeg: MIN_MOON_ALTITUDE_FOR_LOW_SUN_VISIBILITY_DEG,
+        minIlluminationPercent: MIN_MOON_ILLUMINATION_FOR_LOW_SUN_VISIBILITY_PCT,
+      })
+    ) {
+      return {
+        code: "likely_visible_near_sunset",
+        badge: "Near sunset",
+        label: "Likely visible near sunset",
+        detail: "Low sun improves contrast if skies are clear.",
+        badgeClass: "border-amber-300/20 bg-amber-300/10 text-amber-100/90",
+      };
+    }
+
+    return {
+      code: "daylight_limited",
+      badge: "Daylight limited",
+      label: "Not visible right now",
+      detail: "Above horizon, but daylight limits visibility.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  if (context === "bright_daylight") {
+    return {
+      code: "daylight_limited",
+      badge: "Daylight limited",
+      label: "Not visible right now",
+      detail: "Above horizon, but daylight limits visibility.",
+      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+    };
+  }
+
+  return {
+    code: "status_pending",
+    badge: "Status pending",
+    label: "Visibility updating",
+    detail: "Viewing guidance is updating.",
+    badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
+  };
+}
+
+export type TwilightWindowPhase = "civil" | "nautical" | "astronomical";
+
+export type TwilightWindowFrame = {
+  key: "sunrise" | "sunset";
+  label: "Sunrise" | "Sunset";
+  startIso: string | null | undefined;
+  endIso: string | null | undefined;
+};
+
+export function formatClockTime(
+  iso: string | null | undefined,
+  tz: string,
+): string {
+  if (!iso) return "—";
+
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  }).format(d);
+}
+
+export function formatClockRange(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+  tz: string,
+  separator = " - ",
+): string {
+  const start = formatClockTime(startIso, tz);
+  const end = formatClockTime(endIso, tz);
+
+  if (start === "—" && end === "—") return "—";
+  return `${start}${separator}${end}`;
+}
+
+export function buildTwilightWindowFrames(
+  twilight: Pick<
+    MoonCardTwilightData,
+    | "civil_dawn"
+    | "civil_dusk"
+    | "nautical_dawn"
+    | "nautical_dusk"
+    | "astronomical_dawn"
+    | "astronomical_dusk"
+  >,
+  sun: Pick<MoonCardSunData, "sunrise" | "sunset">,
+): Record<TwilightWindowPhase, [TwilightWindowFrame, TwilightWindowFrame]> {
+  return {
+    civil: [
+      {
+        key: "sunrise",
+        label: "Sunrise",
+        startIso: twilight.civil_dawn,
+        endIso: sun.sunrise,
+      },
+      {
+        key: "sunset",
+        label: "Sunset",
+        startIso: sun.sunset,
+        endIso: twilight.civil_dusk,
+      },
+    ],
+    nautical: [
+      {
+        key: "sunrise",
+        label: "Sunrise",
+        startIso: twilight.nautical_dawn,
+        endIso: twilight.civil_dawn,
+      },
+      {
+        key: "sunset",
+        label: "Sunset",
+        startIso: twilight.civil_dusk,
+        endIso: twilight.nautical_dusk,
+      },
+    ],
+    astronomical: [
+      {
+        key: "sunrise",
+        label: "Sunrise",
+        startIso: twilight.astronomical_dawn,
+        endIso: twilight.nautical_dawn,
+      },
+      {
+        key: "sunset",
+        label: "Sunset",
+        startIso: twilight.nautical_dusk,
+        endIso: twilight.astronomical_dusk,
+      },
+    ],
+  };
+}
+
+export function formatTwilightWindowSummary(
+  frames: readonly TwilightWindowFrame[],
+  tz: string,
+): string {
+  const ranges = frames
+    .map((frame) => formatClockRange(frame.startIso, frame.endIso, tz))
+    .filter((value) => value !== "—");
+
+  if (ranges.length === 0) return "—";
+  return ranges.join(" / ");
 }
 
 export function formatLocalTime(iso: string | undefined, tz: string): string {

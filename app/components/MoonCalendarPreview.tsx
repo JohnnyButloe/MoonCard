@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { differenceInCalendarDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { useMoonPhaseWindow } from "../hooks/useAstronomy";
@@ -19,11 +20,13 @@ import {
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_HEADER_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
-  DASHBOARD_SURFACE_CLASS,
   DASHBOARD_VALUE_CLASS,
 } from "./moonDashboardShared";
 
 const WINDOW_DAYS = 35;
+const EVENTS_PANEL_CLASS = `${DASHBOARD_PANEL_CLASS} gap-2.5 p-3.5`;
+const EVENT_SURFACE_CLASS =
+  "rounded-[1rem] bg-white/[0.03] px-3 py-2 ring-1 ring-inset ring-white/7";
 
 function formatPhaseDate(iso: string, tz: string) {
   return formatInTimeZone(new Date(iso), tz, "EEE, MMM d");
@@ -31,6 +34,17 @@ function formatPhaseDate(iso: string, tz: string) {
 
 function formatPhaseTime(iso: string, tz: string) {
   return formatInTimeZone(new Date(iso), tz, "h:mm a");
+}
+
+function getRelativeLabel(dateIso: string, todayDateIso: string): string | null {
+  const dayCount = differenceInCalendarDays(
+    new Date(`${dateIso}T12:00:00Z`),
+    new Date(`${todayDateIso}T12:00:00Z`),
+  );
+
+  if (dayCount <= 0) return null;
+  if (dayCount === 1) return "Tomorrow";
+  return `In ${dayCount} days`;
 }
 
 export default function MoonCalendarPreview({
@@ -59,7 +73,7 @@ export default function MoonCalendarPreview({
 
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
-      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[16rem]`}>
+      <div className={`${EVENTS_PANEL_CLASS} min-h-[15rem]`}>
         <div className={DASHBOARD_PANEL_HEADER_CLASS}>
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-28 rounded-full" />
@@ -72,7 +86,7 @@ export default function MoonCalendarPreview({
           {Array.from({ length: 3 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`calendar-preview-skeleton-${index}`}
-              className="h-[4.25rem] rounded-xl"
+              className="h-[3.7rem] rounded-xl"
             />
           ))}
         </div>
@@ -90,7 +104,7 @@ export default function MoonCalendarPreview({
         title="Calendar preview unavailable"
         body="The upcoming phase preview could not be loaded right now."
         tone="danger"
-        minHeightClass="min-h-[16rem]"
+        minHeightClass="min-h-[15rem]"
       />
     );
   }
@@ -100,7 +114,7 @@ export default function MoonCalendarPreview({
       <DashboardPanelState
         title="Calendar preview unavailable"
         body="The upcoming phase preview is still waiting for phase data."
-        minHeightClass="min-h-[16rem]"
+        minHeightClass="min-h-[15rem]"
       />
     );
   }
@@ -129,11 +143,12 @@ export default function MoonCalendarPreview({
         : null;
 
   return (
-    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[16rem]`}>
+    <div className={EVENTS_PANEL_CLASS}>
       <header className={`${DASHBOARD_PANEL_HEADER_CLASS} flex-wrap`}>
         <div className="min-w-0">
           <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Lunar events</p>
           <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>{title}</h2>
+          <p className="mt-1 text-[10px] text-slate-400/62">Next 35 days</p>
         </div>
       </header>
 
@@ -145,47 +160,60 @@ export default function MoonCalendarPreview({
 
       {upcomingPhases.length > 0 ? (
         <section className="space-y-2">
-          {upcomingPhases.map((phase) => (
-            <div
-              key={`${phase.key}-${phase.instant_utc}`}
-              className={`${DASHBOARD_SURFACE_CLASS} flex items-start gap-3`}
-            >
-              <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 shrink-0`}>
-                <MoonPhaseCircle
-                  size={18}
-                  illuminationFrac={phase.illumination_frac}
-                  waxing={phase.waxing}
-                  phaseAngleDeg={phase.phase_angle_deg}
-                />
-              </div>
+          {upcomingPhases.map((phase) => {
+            const relativeLabel = phase.isToday
+              ? null
+              : getRelativeLabel(phase.dateLocal, todayDateIso);
 
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <div className={DASHBOARD_VALUE_CLASS}>{phase.label}</div>
-                  {phase.isToday ? (
-                    <span className={`${DASHBOARD_BADGE_MUTED_CLASS} border-sky-300/18 bg-sky-300/10 py-0.5 text-sky-100/78`}>
-                      Today
-                    </span>
-                  ) : null}
+            return (
+              <div
+                key={`${phase.key}-${phase.instant_utc}`}
+                className={`${EVENT_SURFACE_CLASS} flex items-start gap-3`}
+              >
+                <div className={`${DASHBOARD_ICON_BADGE_CLASS} mt-0.5 h-8 w-8 shrink-0`}>
+                  <MoonPhaseCircle
+                    size={20}
+                    illuminationFrac={phase.illumination_frac}
+                    waxing={phase.waxing}
+                    phaseAngleDeg={phase.phase_angle_deg}
+                  />
                 </div>
-                <div className={`mt-1 ${DASHBOARD_METRIC_LABEL_CLASS}`}>
-                  {formatPhaseDate(phase.instant_local, tz)}
-                </div>
-                <div className="mt-0.5 text-[12px] font-medium text-slate-100">
-                  {formatPhaseTime(phase.instant_local, tz)}
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div className={DASHBOARD_VALUE_CLASS}>{phase.label}</div>
+                    {phase.isToday ? (
+                      <span className={`${DASHBOARD_BADGE_MUTED_CLASS} border-sky-300/18 bg-sky-300/10 py-0.5 text-sky-100/78`}>
+                        Today
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div className={DASHBOARD_METRIC_LABEL_CLASS}>
+                      {formatPhaseDate(phase.instant_local, tz)}
+                    </div>
+                    {relativeLabel ? (
+                      <div className="text-[11px] text-slate-300/58">
+                        {relativeLabel}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-0.5 text-[12px] font-medium tabular-nums text-slate-100">
+                    {formatPhaseTime(phase.instant_local, tz)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </section>
       ) : (
-        <div className={`${DASHBOARD_SURFACE_CLASS} text-sm text-slate-300/72`}>
+        <div className={`${EVENT_SURFACE_CLASS} text-sm text-slate-300/72`}>
           No major phases are scheduled in the current preview window.
         </div>
       )}
 
-      <footer className={DASHBOARD_META_FOOTER_CLASS}>
-        Previewing the next major phases in the 35-day calendar window.
+      <footer className={`${DASHBOARD_META_FOOTER_CLASS} pt-2 text-slate-400/60`}>
+        Major phases in the current 35-day window.
       </footer>
     </div>
   );

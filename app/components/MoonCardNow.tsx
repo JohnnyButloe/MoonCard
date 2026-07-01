@@ -22,6 +22,7 @@ import {
   DASHBOARD_VALUE_LARGE_CLASS,
   formatMoonEventDetail,
   formatTimeOrDateTime,
+  getLunarVisibilityState,
 } from "./moonDashboardShared";
 
 function formatPercent(value: number | null): string {
@@ -214,28 +215,12 @@ export default function MoonNowCard({
               message: "Some lunar details are unavailable right now.",
             }
           : null;
-  const visibilityState =
-    moon.is_up === true
-      ? {
-          badge: "Visible now",
-          label: "Above horizon",
-          detail: "Currently visible over the horizon.",
-          badgeClass:
-            "border-emerald-300/20 bg-emerald-300/10 text-emerald-100/90",
-        }
-      : moon.is_up === false
-        ? {
-            badge: "Below horizon",
-            label: "Below horizon",
-            detail: "Currently below the horizon.",
-            badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
-          }
-        : {
-            badge: "Status pending",
-            label: "Position pending",
-            detail: "Horizon state is temporarily unavailable.",
-            badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
-          };
+  const visibilityState = getLunarVisibilityState({
+    moon,
+    sun: summary.sun,
+    twilight: summary.twilight,
+    isDarkEnoughForViewing: summary.visibility.is_dark_enough_for_viewing,
+  });
   const keyEvent = getKeyEvent({
     nowIso: summary.meta.timestamp_iso,
     moonrise: moon.moonrise,

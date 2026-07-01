@@ -52,7 +52,7 @@ describe("MoonGraph", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the chart chrome with the twilight badge and updated label", () => {
+  it("renders the chart chrome with the twilight badge, object legend, and twilight windows", () => {
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
         data: buildCanonicalMoonCardResponse(),
@@ -65,6 +65,38 @@ describe("MoonGraph", () => {
     expect(screen.getByText("Moon/Sun altitude")).toBeInTheDocument();
     expect(screen.getByText("Twilight Astronomical")).toBeInTheDocument();
     expect(screen.getByText("Updated 6:35 AM")).toBeInTheDocument();
+    expect(screen.getByText("Moon now")).toBeInTheDocument();
+    expect(screen.getByText("Sun now")).toBeInTheDocument();
+    expect(screen.getByText("Horizon")).toBeInTheDocument();
+    expect(screen.getByTestId("below-horizon-band")).toBeInTheDocument();
+    expect(screen.getByTestId("below-horizon-haze")).toBeInTheDocument();
+    expect(screen.getByTestId("below-horizon-depth-shadow")).toBeInTheDocument();
+    expect(screen.getByTestId("below-horizon-limb-shadow")).toBeInTheDocument();
+    expect(screen.queryByTestId("below-horizon-earth-map")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("below-horizon-earth-grid")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("below-horizon-earth-silhouettes"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("horizon-glow-line")).toBeInTheDocument();
+    expect(screen.getByTestId("horizon-line")).toBeInTheDocument();
+    expect(screen.queryByTestId("below-horizon-label")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Sunrise")).toHaveLength(4);
+    expect(screen.getByText("6:42 AM")).toBeInTheDocument();
+    expect(screen.getAllByText("Sunset")).toHaveLength(4);
+    expect(screen.getByText("7:15 PM")).toBeInTheDocument();
+    expect(screen.getByText("Twilight windows")).toBeInTheDocument();
+    expect(screen.getByText("Civil twilight")).toBeInTheDocument();
+    expect(screen.getByText("6:15 AM - 6:42 AM")).toBeInTheDocument();
+    expect(screen.getByText("7:15 PM - 7:42 PM")).toBeInTheDocument();
+    expect(screen.getByText("Bright twilight")).toBeInTheDocument();
+    expect(screen.getByText("Nautical twilight")).toBeInTheDocument();
+    expect(screen.getByText("5:42 AM - 6:15 AM")).toBeInTheDocument();
+    expect(screen.getByText("7:42 PM - 8:12 PM")).toBeInTheDocument();
+    expect(screen.getByText("Darker sky")).toBeInTheDocument();
+    expect(screen.getByText("Astronomical twilight")).toBeInTheDocument();
+    expect(screen.getByText("5:12 AM - 5:42 AM")).toBeInTheDocument();
+    expect(screen.getByText("8:12 PM - 8:42 PM")).toBeInTheDocument();
+    expect(screen.getByText("Best dark-sky window")).toBeInTheDocument();
   });
 
   it("keeps rendering cached data when the timeline refresh fails", () => {
@@ -400,7 +432,7 @@ describe("MoonGraph", () => {
     expect(Math.abs((pathPoint?.[1] ?? 0) - expectedY)).toBeLessThan(0.1);
   });
 
-  it("shows hover tooltip data from the nearest real Moon sample while keeping the marker on the visual curve", () => {
+  it("shows hover tooltip data from the nearest real Moon sample while keeping the marker on the sampled moon path", () => {
     const data = buildCanonicalMoonCardResponse();
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
@@ -433,7 +465,9 @@ describe("MoonGraph", () => {
     expect(screen.getByText("-18°")).toBeInTheDocument();
     expect(screen.getByText("Direction")).toBeInTheDocument();
     expect(screen.getByText("E / 91°")).toBeInTheDocument();
-    expect(screen.getByText("Below horizon")).toBeInTheDocument();
+    expect(screen.getByTestId("moon-hover-tooltip")).toHaveTextContent(
+      "Below horizon",
+    );
 
     const points = buildAltitudePlotPoints({
       dayStartMs: Date.parse("2026-04-05T00:00:00Z"),
@@ -441,20 +475,10 @@ describe("MoonGraph", () => {
       samples: data.moon.path?.samples,
     });
     const hoveredPoint = points[0];
-    const expectedY = getMoonVisualYForMs({
-      targetMs: hoveredPoint.ms,
-      dayStartMs: Date.parse("2026-04-05T00:00:00Z"),
-      dayEndMs: Date.parse("2026-04-06T00:00:00Z"),
-      riseMs: Date.parse(data.moon.moonrise ?? ""),
-      setMs: Date.parse(data.moon.moonset ?? ""),
-      peakMs: Date.parse(data.moon.high_moon ?? ""),
-      isUp: data.moon.is_up,
-    });
     const hoverMarker = screen.getByTestId("moon-hover-marker");
     const hoverMarkerY = Number(hoverMarker.getAttribute("cy"));
 
-    expect(hoverMarkerY).toBeCloseTo(expectedY, 4);
-    expect(Math.abs(hoverMarkerY - hoveredPoint.y)).toBeGreaterThan(0.5);
+    expect(hoverMarkerY).toBeCloseTo(hoveredPoint.y, 4);
 
     fireEvent.pointerLeave(svg);
 

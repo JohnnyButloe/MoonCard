@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -12,10 +12,6 @@ const mockUseMoonPhaseWindow = vi.hoisted(() => vi.fn());
 
 vi.mock("../hooks/useAstronomy", () => ({
   useMoonPhaseWindow: mockUseMoonPhaseWindow,
-}));
-
-vi.mock("./MoonPhaseCalendar", () => ({
-  default: () => <div>full-moon-phase-calendar</div>,
 }));
 
 import MoonCalendarPreview from "./MoonCalendarPreview";
@@ -41,7 +37,7 @@ describe("MoonCalendarPreview", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the next major phases preview and opens the full calendar modal", () => {
+  it("renders the next lunar events preview", () => {
     mockUseMoonPhaseWindow.mockReturnValue(
       buildQueryResult({
         data: buildMoonPhaseWindow(),
@@ -51,14 +47,10 @@ describe("MoonCalendarPreview", () => {
     render(<MoonCalendarPreview tz="UTC" />);
 
     expect(mockUseMoonPhaseWindow).toHaveBeenCalledWith("UTC", "2026-04-05", 35);
-    expect(screen.getByText("Next major phases")).toBeInTheDocument();
+    expect(screen.getByText("Next lunar events")).toBeInTheDocument();
+    expect(screen.getByText("Next 35 days")).toBeInTheDocument();
     expect(screen.getByText("First Quarter")).toBeInTheDocument();
     expect(screen.getByText("Full Moon")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open full calendar" }));
-
-    expect(screen.getByRole("dialog", { name: "Lunar calendar" })).toBeInTheDocument();
-    expect(screen.getByText("full-moon-phase-calendar")).toBeInTheDocument();
   });
 
   it("shows a degraded banner when cached phase data is being reused after an error", () => {

@@ -295,7 +295,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Lunar calendar"
-              className="min-w-0 md:col-span-8"
+              className="order-2 min-w-0 md:order-1 md:col-span-8"
             >
               <section className="flex min-w-0">
                 <MoonPhaseCalendar key={tz} tz={tz} compact />
@@ -304,7 +304,7 @@ function DashboardContent({
 
             <DashboardSectionFrame
               title="Next lunar events"
-              className="flex min-w-0 md:col-span-4"
+              className="order-1 flex min-w-0 md:order-2 md:col-span-4"
             >
               <MoonCalendarPreview
                 key={`${tz}-events`}

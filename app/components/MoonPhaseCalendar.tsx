@@ -18,6 +18,26 @@ import {
 } from "./moonDashboardShared";
 
 const WINDOW_DAYS = 35;
+const CALENDAR_LEGEND_ITEMS = [
+  {
+    label: "Full Moon",
+    illuminationFrac: 1,
+    waxing: false,
+    phaseAngleDeg: 180,
+  },
+  {
+    label: "Quarter",
+    illuminationFrac: 0.5,
+    waxing: true,
+    phaseAngleDeg: 90,
+  },
+  {
+    label: "New Moon",
+    illuminationFrac: 0,
+    waxing: true,
+    phaseAngleDeg: 0,
+  },
+] as const;
 
 function formatRangeDate(dateIso: string, tz: string) {
   return formatInTimeZone(fromZonedTime(`${dateIso}T12:00:00`, tz), tz, "MMM d");
@@ -80,17 +100,17 @@ export default function MoonPhaseCalendar({
   }, [selectedPhaseKey]);
 
   const panelMinHeightClass = compact ? "min-h-[16rem]" : "min-h-[19rem]";
-  const dayCellHeightClass = compact ? "h-[2.35rem]" : "h-[2.85rem]";
-  const dayCellPaddingClass = compact ? "px-1.25 py-0.75" : "px-1.5 py-1";
+  const dayCellHeightClass = compact ? "h-[2.2rem]" : "h-[2.7rem]";
+  const dayCellPaddingClass = compact ? "px-1 py-0.75" : "px-1.25 py-0.9";
   const dayNumberClass = compact
     ? "text-[12px] font-semibold leading-none text-slate-100"
     : "text-[13px] font-semibold leading-none text-slate-100";
-  const iconSize = compact ? 10 : 12;
-  const gridGapClass = compact ? "gap-[0.35rem]" : "gap-0.5";
+  const iconSize = compact ? 13 : 15;
+  const gridGapClass = compact ? "gap-1" : "gap-[0.35rem]";
 
   if (phaseWindowQ.isLoading && !phaseWindowQ.data) {
     return (
-      <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2.5`}>
+      <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2`}>
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-2">
             <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
@@ -178,49 +198,68 @@ export default function MoonPhaseCalendar({
 
   const dayLabels = days.slice(0, 7).map((day) => day.weekday_short);
   const rangeLabel = `${formatRangeDate(meta.window_start_local_date, tz)} - ${formatRangeDate(meta.window_end_local_date, tz)}`;
-
   return (
-    <section ref={rootRef} className={`flex ${panelMinHeightClass} flex-1 flex-col gap-2.5`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+    <section ref={rootRef} className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0 space-y-1">
           <h3 className={DASHBOARD_METRIC_LABEL_CLASS}>
             Moon calendar
           </h3>
           <p className={DASHBOARD_PANEL_TITLE_CLASS}>
             Major phases
           </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-300/62">
+              {CALENDAR_LEGEND_ITEMS.map((item) => (
+                <div key={item.label} className="flex items-center gap-1.5">
+                  <MoonPhaseCircle
+                    size={12}
+                    illuminationFrac={item.illuminationFrac}
+                    waxing={item.waxing}
+                    phaseAngleDeg={item.phaseAngleDeg}
+                  />
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5 px-1.5 py-1`}>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPhaseKey(null);
-              setWeekOffset((current) => Math.max(0, current - 1));
-            }}
-            disabled={weekOffset === 0}
-            aria-label="View previous week window"
-            className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
-              weekOffset === 0
-                ? "cursor-not-allowed border-white/8 text-slate-500/45"
-                : "border-white/10 bg-white/[0.02] text-slate-200/85 hover:border-white/20 hover:text-white"
-            }`}
-          >
-            &lt;
-          </button>
-          <p className={`min-w-[7.25rem] text-center ${DASHBOARD_MUTED_TEXT_CLASS}`}>
-            {rangeLabel}
+        <div className="flex min-w-[11rem] flex-col items-end gap-1">
+          <div className={`${DASHBOARD_BADGE_MUTED_CLASS} gap-1.5 px-1.5 py-1`}>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPhaseKey(null);
+                setWeekOffset((current) => Math.max(0, current - 1));
+              }}
+              disabled={weekOffset === 0}
+              aria-label="View previous week window"
+              className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs transition ${
+                weekOffset === 0
+                  ? "cursor-not-allowed border-white/8 text-slate-500/45"
+                  : "border-white/10 bg-white/[0.02] text-slate-200/85 hover:border-white/20 hover:text-white"
+              }`}
+            >
+              &lt;
+            </button>
+            <p className={`min-w-[7.25rem] text-center ${DASHBOARD_MUTED_TEXT_CLASS}`}>
+              {rangeLabel}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPhaseKey(null);
+                setWeekOffset((current) => current + 1);
+              }}
+              aria-label="View next week window"
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-xs text-slate-200/85 transition hover:border-white/20 hover:text-white"
+            >
+              &gt;
+            </button>
+          </div>
+          <p className="text-right text-[10px] text-slate-400/60">
+            Next 35 days
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPhaseKey(null);
-              setWeekOffset((current) => current + 1);
-            }}
-            aria-label="View next week window"
-            className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-xs text-slate-200/85 transition hover:border-white/20 hover:text-white"
-          >
-            &gt;
-          </button>
         </div>
       </div>
 
@@ -260,8 +299,8 @@ export default function MoonPhaseCalendar({
               key={day.date_local}
               className={`relative flex ${dayCellHeightClass} flex-col rounded-lg border ${dayCellPaddingClass} transition ${
                 primaryEntry
-                  ? "border-sky-300/32 bg-sky-400/8 shadow-[0_0_0_1px_rgba(125,211,252,0.04)]"
-                  : "border-white/8 bg-slate-950/30"
+                  ? "border-sky-300/36 bg-sky-400/[0.11] shadow-[0_0_0_1px_rgba(125,211,252,0.05)]"
+                  : "border-white/7 bg-slate-950/24"
               } ${day.is_today ? "ring-1 ring-sky-300/55" : ""} ${isPast ? "opacity-55" : ""}`}
             >
               <div className="flex items-center justify-between gap-2">

@@ -7,17 +7,14 @@ import {
   DashboardStatusBanner,
 } from "./DashboardState";
 import {
+  buildTwilightWindowFrames,
+  DASHBOARD_BADGE_MUTED_CLASS,
   DASHBOARD_META_FOOTER_CLASS,
-  DASHBOARD_METRIC_TILE_CLASS,
-  DASHBOARD_METRIC_LABEL_CLASS,
-  DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
-  DASHBOARD_SUPPORT_TEXT_CLASS,
-  DASHBOARD_SURFACE_CLASS,
-  DASHBOARD_VALUE_CLASS,
   formatLocalTime,
+  formatTwilightWindowSummary,
   formatTimeOrDateTime,
 } from "./moonDashboardShared";
 
@@ -44,38 +41,59 @@ function formatVisibilityLabel(isUp: boolean | null | undefined): string {
   return "Horizon pending";
 }
 
-function formatTwilightLabel(value: string | null | undefined): string {
+type SupportingDetailRow = {
+  label: string;
+  value: string;
+  valueStyle?: "default" | "pill";
+  emphasized?: boolean;
+};
+
+type SupportingDetailSection = {
+  title: string;
+  rows: SupportingDetailRow[];
+};
+
+const SUPPORTING_CARD_CLASS = `${DASHBOARD_PANEL_CLASS} gap-2.5 p-3.5 sm:p-3.5`;
+const CONTEXT_GRID_CLASS = "grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3";
+const CONTEXT_PANEL_CLASS =
+  "rounded-[1rem] border border-white/7 bg-white/[0.028] px-2.5 py-1.5 ring-1 ring-inset ring-white/6 sm:px-3 sm:py-2";
+const CONTEXT_PANEL_TITLE_CLASS =
+  "text-[10px] uppercase tracking-[0.2em] text-slate-200/68";
+const CONTEXT_PANEL_ROWS_CLASS = "mt-1.5 space-y-1.5";
+const CONTEXT_ROW_CLASS =
+  "flex items-start justify-between gap-3 border-t border-white/7 pt-1.5 first:border-t-0 first:pt-0";
+const CONTEXT_ROW_LABEL_CLASS =
+  "pr-2 text-[11px] font-medium leading-snug text-slate-300/74";
+const CONTEXT_ROW_VALUE_CLASS =
+  "min-w-0 flex-1 text-right text-[13px] font-semibold leading-snug text-slate-50 tabular-nums";
+const CONTEXT_PILL_CLASS =
+  `${DASHBOARD_BADGE_MUTED_CLASS} px-2 py-0.5 text-[11px] normal-case tracking-normal text-slate-100/86`;
+const CONTEXT_EMPHASIZED_ROW_CLASS = "text-slate-200/86";
+const CONTEXT_EMPHASIZED_VALUE_CLASS = "text-slate-50";
+
+function formatSkyStateLabel(value: string | null | undefined): string {
+  switch (value) {
+    case "day":
+      return "Daylight";
+    case "civil":
+    case "nautical":
+    case "astronomical":
+      return "Twilight";
+    case "dark":
+      return "Night";
+    default:
+      break;
+  }
+
   if (!value) return "Unavailable";
+  if (value.includes("twilight")) return "Twilight";
+  if (value.includes("day")) return "Daylight";
+  if (value.includes("dark") || value.includes("night")) return "Night";
 
   return value
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function formatClockTime(iso: string | null | undefined, tz: string): string {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-  }).format(d);
-}
-
-function formatTwilightWindow(
-  dawnIso: string | null | undefined,
-  duskIso: string | null | undefined,
-  tz: string,
-): string {
-  const dawn = formatClockTime(dawnIso, tz);
-  const dusk = formatClockTime(duskIso, tz);
-
-  if (dawn === "—" && dusk === "—") return "—";
-  return `${dawn} / ${dusk}`;
 }
 
 export default function MoonSupportingDetails({
@@ -95,16 +113,16 @@ export default function MoonSupportingDetails({
     return (
       <DashboardPanelState
         title="Supporting details unavailable"
-        body="Rise/set details could not be loaded right now."
+        body="Supporting astronomy details could not be loaded right now."
         tone="danger"
-        minHeightClass="min-h-[19rem]"
+        minHeightClass="min-h-[16rem]"
       />
     );
   }
 
   if (!summaryQ.data) {
     return (
-      <div className={`${DASHBOARD_PANEL_CLASS} min-h-[19rem]`}>
+      <div className={`${SUPPORTING_CARD_CLASS} min-h-[16rem]`}>
         <div className="space-y-2">
           <DashboardSkeletonBlock className="h-2 w-24 rounded-full" />
           <DashboardSkeletonBlock className="h-4 w-40" />
@@ -114,13 +132,13 @@ export default function MoonSupportingDetails({
           {Array.from({ length: 6 }).map((_, index) => (
             <DashboardSkeletonBlock
               key={`support-details-skeleton-${index}`}
-              className="h-[4.8rem] rounded-xl"
+              className="h-[4.25rem] rounded-xl"
             />
           ))}
         </div>
 
-        <DashboardSkeletonBlock className="h-[5.2rem] rounded-xl" />
-        <DashboardSkeletonBlock className="h-[4.8rem] rounded-xl" />
+        <DashboardSkeletonBlock className="h-[3.2rem] rounded-xl" />
+        <DashboardSkeletonBlock className="h-[3.8rem] rounded-xl" />
       </div>
     );
   }
@@ -138,103 +156,124 @@ export default function MoonSupportingDetails({
             message: "Some supporting astronomy details are limited right now.",
           }
         : null;
-  const events = [
+  const twilightWindowFrames = buildTwilightWindowFrames(
+    summary.twilight,
+    summary.sun,
+  );
+  const sections: SupportingDetailSection[] = [
     {
-      label: "Moonrise",
-      value: formatTimeOrDateTime(summary.moon.moonrise ?? undefined, tz),
+      title: "Current Sky",
+      rows: [
+        {
+          label: "State",
+          value: formatSkyStateLabel(summary.twilight.current_phase),
+          valueStyle: "pill",
+        },
+        {
+          label: "Next transition",
+          value: formatTimeOrDateTime(
+            summary.twilight.next_transition ?? undefined,
+            tz,
+          ),
+        },
+      ],
     },
     {
-      label: "High moon",
-      value: formatTimeOrDateTime(summary.moon.high_moon ?? undefined, tz),
+      title: "Moon Position",
+      rows: [
+        {
+          label: "Altitude",
+          value: formatDegrees(summary.moon.altitude_deg),
+        },
+        {
+          label: "Horizon",
+          value: formatVisibilityLabel(summary.moon.is_up),
+          valueStyle: "pill",
+        },
+        {
+          label: "Azimuth",
+          value: formatAzimuthWithDirection(summary.moon.azimuth_deg),
+        },
+      ],
     },
     {
-      label: "Moonset",
-      value: formatTimeOrDateTime(summary.moon.moonset ?? undefined, tz),
+      title: "Sun Position",
+      rows: [
+        {
+          label: "Altitude",
+          value: formatDegrees(summary.sun.altitude_deg),
+        },
+        {
+          label: "Horizon",
+          value: formatVisibilityLabel(summary.sun.is_up),
+          valueStyle: "pill",
+        },
+        {
+          label: "Azimuth",
+          value: formatAzimuthWithDirection(summary.sun.azimuth_deg),
+        },
+      ],
     },
     {
-      label: "Low moon",
-      value: formatTimeOrDateTime(summary.moon.low_moon ?? undefined, tz),
+      title: "Lunar Timing",
+      rows: [
+        {
+          label: "High moon",
+          value: formatTimeOrDateTime(summary.moon.high_moon ?? undefined, tz),
+        },
+        {
+          label: "Low moon",
+          value: formatTimeOrDateTime(summary.moon.low_moon ?? undefined, tz),
+        },
+      ],
     },
     {
-      label: "Sunrise",
-      value: formatTimeOrDateTime(summary.sun.sunrise ?? undefined, tz),
+      title: "Solar Timing",
+      rows: [
+        {
+          label: "Sunrise",
+          value: formatTimeOrDateTime(summary.sun.sunrise ?? undefined, tz),
+        },
+        {
+          label: "Sunset",
+          value: formatTimeOrDateTime(summary.sun.sunset ?? undefined, tz),
+        },
+      ],
     },
     {
-      label: "Sunset",
-      value: formatTimeOrDateTime(summary.sun.sunset ?? undefined, tz),
-    },
-  ];
-  const positionItems = [
-    {
-      label: "Moon altitude",
-      value: formatDegrees(summary.moon.altitude_deg),
-      detail: formatVisibilityLabel(summary.moon.is_up),
-    },
-    {
-      label: "Moon azimuth",
-      value: formatAzimuthWithDirection(summary.moon.azimuth_deg),
-      detail: "Current bearing",
-    },
-    {
-      label: "Sun altitude",
-      value: formatDegrees(summary.sun.altitude_deg),
-      detail: formatVisibilityLabel(summary.sun.is_up),
-    },
-    {
-      label: "Sun azimuth",
-      value: formatAzimuthWithDirection(summary.sun.azimuth_deg),
-      detail: "Current bearing",
-    },
-  ];
-  const twilightItems = [
-    {
-      label: "Current phase",
-      value: formatTwilightLabel(summary.twilight.current_phase),
-    },
-    {
-      label: "Next transition",
-      value: formatTimeOrDateTime(summary.twilight.next_transition ?? undefined, tz),
-    },
-    {
-      label: "Civil twilight",
-      value: formatTwilightWindow(
-        summary.twilight.civil_dawn,
-        summary.twilight.civil_dusk,
-        tz,
-      ),
-    },
-    {
-      label: "Nautical twilight",
-      value: formatTwilightWindow(
-        summary.twilight.nautical_dawn,
-        summary.twilight.nautical_dusk,
-        tz,
-      ),
-    },
-    {
-      label: "Astronomical twilight",
-      value: formatTwilightWindow(
-        summary.twilight.astronomical_dawn,
-        summary.twilight.astronomical_dusk,
-        tz,
-      ),
+      title: "Twilight Windows",
+      rows: [
+        {
+          label: "Civil",
+          value: formatTwilightWindowSummary(twilightWindowFrames.civil, tz),
+          emphasized: summary.twilight.current_phase === "civil",
+        },
+        {
+          label: "Nautical",
+          value: formatTwilightWindowSummary(
+            twilightWindowFrames.nautical,
+            tz,
+          ),
+          emphasized: summary.twilight.current_phase === "nautical",
+        },
+        {
+          label: "Astronomical",
+          value: formatTwilightWindowSummary(
+            twilightWindowFrames.astronomical,
+            tz,
+          ),
+          emphasized: summary.twilight.current_phase === "astronomical",
+        },
+      ],
     },
   ];
   const updatedLabel =
     summaryQ.dataUpdatedAt > 0
       ? formatLocalTime(new Date(summaryQ.dataUpdatedAt).toISOString(), tz)
       : "—";
-  const visibilitySummary =
-    summary.visibility.summary ?? "Viewing guidance is unavailable for this update.";
-  const viewingLabel =
-    summary.visibility.is_dark_enough_for_viewing === true
-      ? "Good viewing"
-      : summary.visibility.is_dark_enough_for_viewing === false
-        ? "Bright sky"
-        : "Viewing unknown";
 
   return (
-    <div className={`${DASHBOARD_PANEL_CLASS} min-h-[19rem]`}>
+    <div className={SUPPORTING_CARD_CLASS}>
       <header className="min-w-0">
         <p className={DASHBOARD_PANEL_EYEBROW_CLASS}>Supporting context</p>
         <h2 className={DASHBOARD_PANEL_TITLE_CLASS}>Extended lunar details</h2>
@@ -246,73 +285,37 @@ export default function MoonSupportingDetails({
         </DashboardStatusBanner>
       ) : null}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <div className="space-y-3">
-          <section className={DASHBOARD_SURFACE_CLASS}>
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Exact position</div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {positionItems.map((item) => (
-                <div
-                  key={item.label}
-                  className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5rem]`}
-                >
-                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
-                  <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
-                    {item.value}
+      <div className={CONTEXT_GRID_CLASS}>
+        {sections.map((section) => (
+          <section key={section.title} className={CONTEXT_PANEL_CLASS}>
+            <div className={CONTEXT_PANEL_TITLE_CLASS}>{section.title}</div>
+            <div className={CONTEXT_PANEL_ROWS_CLASS}>
+              {section.rows.map((item) => (
+                <div key={item.label} className={CONTEXT_ROW_CLASS}>
+                  <div
+                    className={`${CONTEXT_ROW_LABEL_CLASS}${item.emphasized ? ` ${CONTEXT_EMPHASIZED_ROW_CLASS}` : ""}`}
+                  >
+                    {item.label}
                   </div>
-                  <div className={DASHBOARD_MUTED_TEXT_CLASS}>{item.detail}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={DASHBOARD_SURFACE_CLASS}>
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Moon and sun events</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 xl:grid-cols-3">
-              {events.map((event) => (
-                <div
-                  key={event.label}
-                  className={`${DASHBOARD_METRIC_TILE_CLASS} min-h-[5.25rem]`}
-                >
-                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{event.label}</div>
-                  <div className={`${DASHBOARD_VALUE_CLASS} text-[13px] leading-snug`}>
-                    {event.value}
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`${CONTEXT_ROW_VALUE_CLASS}${item.emphasized ? ` ${CONTEXT_EMPHASIZED_VALUE_CLASS}` : ""}`}
+                    >
+                      {item.valueStyle === "pill" ? (
+                        <span className={CONTEXT_PILL_CLASS}>{item.value}</span>
+                      ) : (
+                        item.value
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </section>
-        </div>
-
-        <div className="space-y-3">
-          <section className={DASHBOARD_SURFACE_CLASS}>
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight details</div>
-            <div className="mt-2 space-y-2">
-              {twilightItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-start justify-between gap-3 border-b border-white/7 pb-2 last:border-b-0 last:pb-0"
-                >
-                  <div className={DASHBOARD_METRIC_LABEL_CLASS}>{item.label}</div>
-                  <div className="text-right text-[12px] font-medium text-slate-100">
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={DASHBOARD_SURFACE_CLASS}>
-            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Viewing notes</div>
-            <div className="mt-1 text-sm font-semibold text-slate-50">
-              {viewingLabel}
-            </div>
-            <div className={DASHBOARD_SUPPORT_TEXT_CLASS}>{visibilitySummary}</div>
-          </section>
-        </div>
+        ))}
       </div>
 
-      <footer className={DASHBOARD_META_FOOTER_CLASS}>
+      <footer className={`${DASHBOARD_META_FOOTER_CLASS} pt-2 text-slate-400/56`}>
         <div>Source: {summary.meta.calculation_source}</div>
         <div>
           Updated {updatedLabel}

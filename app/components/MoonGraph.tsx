@@ -14,7 +14,11 @@ import {
 import { MoonPhaseCircle } from "./MoonPhaseCircle";
 import { SunDisc } from "./SunDisc";
 import {
+  buildTwilightWindowFrames,
   DASHBOARD_BADGE_MUTED_CLASS,
+  formatClockRange,
+  DASHBOARD_METRIC_LABEL_CLASS,
+  DASHBOARD_METRIC_TILE_CLASS,
   DASHBOARD_MUTED_TEXT_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_TITLE_CLASS,
@@ -41,6 +45,14 @@ const MIN_MOON_ABOVE_ALTITUDE = 20;
 const MIN_MOON_BELOW_MAGNITUDE = 12;
 const MOON_ABOVE_HORIZON_BOOST_EXPONENT = 0.65;
 const MOON_BELOW_HORIZON_COMPRESS_EXPONENT = 0.9;
+const HORIZON_LINE_STROKE = "rgba(226,232,240,0.72)";
+const HORIZON_LINE_GLOW_STROKE = "rgba(125,211,252,0.1)";
+const BELOW_HORIZON_GRADIENT_TOP = "#121d30";
+const BELOW_HORIZON_GRADIENT_MID = "#08111f";
+const BELOW_HORIZON_GRADIENT_BOTTOM = "#020617";
+const BELOW_HORIZON_HAZE_TOP = "rgba(186,230,253,0.14)";
+const BELOW_HORIZON_HAZE_BOTTOM = "rgba(15,23,42,0)";
+const BELOW_HORIZON_LIMB_STROKE = "rgba(148,163,184,0.13)";
 
 type TwilightPhase = "dark" | "astronomical" | "nautical" | "civil" | "day";
 
@@ -167,6 +179,15 @@ const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
 function formatRoundedDegrees(value: number) {
   return `${Math.round(value)}°`;
+}
+
+function formatLegendTime(iso: string | null | undefined, tz: string) {
+  if (!iso) return "—";
+
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+
+  return formatInTimeZone(date, tz, "h:mm a");
 }
 
 function toCompassDirection(azDeg: number) {
@@ -567,6 +588,21 @@ export function buildMoonVisualOrbitPath(input: {
   return d.trim();
 }
 
+export function buildMoonAltitudeSamplePath(points: AltitudePlotPoint[]) {
+  if (points.length < 2) {
+    return "";
+  }
+
+  let d = "";
+
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    d += `${index === 0 ? "M" : "L"} ${formatPathNumber(point.x)},${formatPathNumber(point.y)} `;
+  }
+
+  return d.trim();
+}
+
 export function interpolatePlotPointAtMs(
   points: AltitudePlotPoint[],
   targetMs: number,
@@ -857,8 +893,6 @@ export default function MoonAltitudeGraph({
     `${nextDateIso(localDate)}T00:00:00`,
     tz,
   ).getTime();
-  // Keep the real Moon samples parsed and ready for future hover lookup, but
-  // do not let their altitude values control the rendered curve geometry.
   const moonPathPoints = buildAltitudePlotPoints({
     samples: summary.moon.path?.samples,
     dayStartMs,
@@ -911,7 +945,7 @@ export default function MoonAltitudeGraph({
   const nowX = timeToX(nowMs, dayStartMs, dayEndMs);
   const moonDotX = nowX;
   const sunDotX = nowX;
-  const moonDotY = getMoonVisualYForMs({
+  const fallbackMoonDotY = getMoonVisualYForMs({
     targetMs: nowMs,
     dayStartMs,
     dayEndMs,
@@ -920,6 +954,10 @@ export default function MoonAltitudeGraph({
     peakMs: highMoonMs,
     isUp: summary.moon.is_up,
   });
+  const moonDotY =
+    hasRealMoonPath
+      ? interpolatePlotPointAtMs(moonPathPoints, nowMs)?.y ?? fallbackMoonDotY
+      : fallbackMoonDotY;
   const sunDotY = buildOrbitCurveY({
     dayStartMs,
     dayEndMs,
@@ -938,20 +976,10 @@ export default function MoonAltitudeGraph({
           isUp: summary.sun.is_up,
         })
       : CURVE_PATH;
-  const moonCurvePath = buildMoonVisualOrbitPath({
-    dayStartMs,
-    dayEndMs,
-    riseMs: moonriseMs,
-    setMs: moonsetMs,
-    peakMs: highMoonMs,
-    isUp: summary.moon.is_up,
-  });
-  const hoveredMoonVisualX = hoveredMoonPoint?.x ?? null;
-  const hoveredMoonVisualY =
-    hoveredMoonPoint === null
-      ? null
-      : getMoonVisualYForMs({
-          targetMs: hoveredMoonPoint.ms,
+  const moonCurvePath =
+    moonPathPoints.length >= 2
+      ? buildMoonAltitudeSamplePath(moonPathPoints)
+      : buildMoonVisualOrbitPath({
           dayStartMs,
           dayEndMs,
           riseMs: moonriseMs,
@@ -959,6 +987,21 @@ export default function MoonAltitudeGraph({
           peakMs: highMoonMs,
           isUp: summary.moon.is_up,
         });
+  const hoveredMoonVisualX = hoveredMoonPoint?.x ?? null;
+  const hoveredMoonVisualY =
+    hoveredMoonPoint === null
+      ? null
+      : hasRealMoonPath
+        ? hoveredMoonPoint.y
+        : getMoonVisualYForMs({
+            targetMs: hoveredMoonPoint.ms,
+            dayStartMs,
+            dayEndMs,
+            riseMs: moonriseMs,
+            setMs: moonsetMs,
+            peakMs: highMoonMs,
+            isUp: summary.moon.is_up,
+          });
   const hoveredMoonTooltipLayout =
     hoveredMoonVisualX === null || hoveredMoonVisualY === null
       ? null
@@ -994,6 +1037,67 @@ export default function MoonAltitudeGraph({
   const weatherSkyStrength = lerp(0.78, 0.96, weatherCloudCover);
   const skyShadowOpacity = lerp(0.05, 0.16, weatherCloudCover);
   const weatherAtmosphereOpacity = lerp(0.03, 0.12, weatherCloudCover);
+  const objectLegendItems = [
+    {
+      key: "moon-now",
+      label: "Moon now",
+      markerClass: "bg-slate-100/92",
+      value: null,
+      marker: "dot" as const,
+    },
+    {
+      key: "sun-now",
+      label: "Sun now",
+      markerClass: "bg-amber-300/92",
+      value: null,
+      marker: "dot" as const,
+    },
+    {
+      key: "horizon",
+      label: "Horizon",
+      markerClass: "bg-slate-300/78",
+      value: null,
+      marker: "line" as const,
+    },
+    {
+      key: "sunrise",
+      label: "Sunrise",
+      markerClass: "bg-sky-300/88",
+      value: formatLegendTime(summary.sun.sunrise, tz),
+      marker: "dot" as const,
+    },
+    {
+      key: "sunset",
+      label: "Sunset",
+      markerClass: "bg-orange-300/88",
+      value: formatLegendTime(summary.sun.sunset, tz),
+      marker: "dot" as const,
+    },
+  ];
+  const twilightWindowFrames = buildTwilightWindowFrames(
+    summary.twilight,
+    summary.sun,
+  );
+  const twilightWindowItems = [
+    {
+      key: "civil",
+      label: "Civil twilight",
+      helper: "Bright twilight",
+      frames: twilightWindowFrames.civil,
+    },
+    {
+      key: "nautical",
+      label: "Nautical twilight",
+      helper: "Darker sky",
+      frames: twilightWindowFrames.nautical,
+    },
+    {
+      key: "astronomical",
+      label: "Astronomical twilight",
+      helper: "Best dark-sky window",
+      frames: twilightWindowFrames.astronomical,
+    },
+  ] as const;
 
   const lastUpdatedLabel = summaryQ.dataUpdatedAt
     ? formatInTimeZone(new Date(summaryQ.dataUpdatedAt), tz, "h:mm a")
@@ -1002,6 +1106,10 @@ export default function MoonAltitudeGraph({
   const plotClipId = `${idPrefix}-plotClip`;
   const sunAuraBlurId = `${idPrefix}-sunAuraBlur`;
   const moonAuraBlurId = `${idPrefix}-moonAuraBlur`;
+  const belowHorizonBandGradientId = `${idPrefix}-belowHorizonBandGradient`;
+  const belowHorizonHazeGradientId = `${idPrefix}-belowHorizonHazeGradient`;
+  const belowHorizonLimbGradientId = `${idPrefix}-belowHorizonLimbGradient`;
+  const belowHorizonClipId = `${idPrefix}-belowHorizonClip`;
 
   return (
     <div className={`${DASHBOARD_PANEL_CLASS} min-h-[18rem]`}>
@@ -1030,289 +1138,464 @@ export default function MoonAltitudeGraph({
         </DashboardStatusBanner>
       ) : null}
 
-      <div className={`${DASHBOARD_SURFACE_CLASS} overflow-hidden bg-black/50 px-0 py-0`}>
-        <div className="relative aspect-[5/1.24] w-full">
-          <svg
-            data-testid="moon-graph-svg"
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            preserveAspectRatio="none"
-            className="block h-full w-full"
-            style={{ isolation: "isolate" }}
-            onPointerDown={handleChartPointerMove}
-            onPointerMove={handleChartPointerMove}
-            onPointerLeave={handleChartPointerLeave}
-            onPointerCancel={handleChartPointerLeave}
-          >
-            <defs>
-              <clipPath id={plotClipId}>
-                <rect
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={VIEW_H}
-                  rx="2.5"
-                  ry="2.5"
-                />
-              </clipPath>
-
-              <filter
-                id={sunAuraBlurId}
-                x="-50%"
-                y="-50%"
-                width="200%"
-                height="200%"
-              >
-                <feGaussianBlur stdDeviation="10" />
-              </filter>
-
-              <filter
-                id={moonAuraBlurId}
-                x="-50%"
-                y="-50%"
-                width="200%"
-                height="200%"
-              >
-                <feGaussianBlur stdDeviation="9" />
-              </filter>
-
-              {skyStripes.map((stripe, idx) => (
-                <clipPath
-                  key={`${idPrefix}-sky-stripe-${idx}`}
-                  id={`${idPrefix}-sky-stripe-${idx}`}
-                >
+      <div className="space-y-1.5">
+        <div className={`${DASHBOARD_SURFACE_CLASS} overflow-hidden bg-black/50 px-0 py-0`}>
+          <div className="relative aspect-[5/1.24] w-full">
+            <svg
+              data-testid="moon-graph-svg"
+              viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+              preserveAspectRatio="none"
+              className="block h-full w-full"
+              style={{ isolation: "isolate" }}
+              onPointerDown={handleChartPointerMove}
+              onPointerMove={handleChartPointerMove}
+              onPointerLeave={handleChartPointerLeave}
+              onPointerCancel={handleChartPointerLeave}
+            >
+              <defs>
+                <clipPath id={plotClipId}>
                   <rect
-                    x={stripe.x}
+                    x="0"
                     y="0"
-                    width={stripe.width}
-                    height={HORIZON_Y}
+                    width={VIEW_W}
+                    height={VIEW_H}
+                    rx="2.5"
+                    ry="2.5"
                   />
                 </clipPath>
-              ))}
-            </defs>
 
-            <g clipPath={`url(#${plotClipId})`}>
-              <g id="bg">
-                <rect
-                  x="0"
-                  y="0"
-                  width={VIEW_W}
-                  height={HORIZON_Y}
-                  fill="#020617"
-                />
-                {skyStripes.map((stripe, idx) => {
-                  const weatherOpacity =
-                    PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] *
-                    weatherSkyStrength;
-                  const nightOpacity =
-                    PHASE_NIGHT_IMAGE_OPACITY[stripe.phase] * nightSkyStrength;
+                <clipPath id={belowHorizonClipId}>
+                  <rect
+                    x="0"
+                    y={HORIZON_Y}
+                    width={VIEW_W}
+                    height={VIEW_H - HORIZON_Y}
+                  />
+                </clipPath>
 
-                  return (
-                    <g
-                      key={`sky-col-${idx}`}
-                      clipPath={`url(#${idPrefix}-sky-stripe-${idx})`}
-                    >
-                      {weatherOpacity > 0 ? (
-                        <image
-                          href={weatherSkyImageUrl}
-                          x="0"
-                          y="0"
-                          width={VIEW_W}
-                          height={HORIZON_Y}
-                          preserveAspectRatio="xMidYMid slice"
-                          opacity={weatherOpacity}
-                        />
-                      ) : null}
-                      {nightOpacity > 0 ? (
-                        <image
-                          href={NIGHT_SKY_IMAGE_URL}
-                          x={stripe.x}
-                          y="0"
-                          width={stripe.width}
-                          height={HORIZON_Y}
-                          preserveAspectRatio="xMidYMid slice"
-                          opacity={nightOpacity}
-                        />
-                      ) : null}
-                      {PHASE_NIGHT_SHADE_OPACITY[stripe.phase] > 0 ? (
-                        <rect
-                          x={stripe.x}
-                          y="0"
-                          width={stripe.width}
-                          height={HORIZON_Y}
-                          fill="rgba(0,0,0,1)"
-                          opacity={PHASE_NIGHT_SHADE_OPACITY[stripe.phase]}
-                        />
-                      ) : null}
-                      <rect
-                        x={stripe.x}
-                        y="0"
-                        width={stripe.width}
-                        height={HORIZON_Y}
-                        fill={TWILIGHT_BAND_COLOR[stripe.phase]}
-                        opacity={PHASE_TINT_OPACITY[stripe.phase]}
-                      />
-                      {PHASE_ATMOSPHERE_OPACITY[stripe.phase] > 0 ? (
-                        <rect
-                          x={stripe.x}
-                          y="0"
-                          width={stripe.width}
-                          height={HORIZON_Y}
-                          fill={`rgba(226,232,240,${weatherAtmosphereOpacity})`}
-                          opacity={PHASE_ATMOSPHERE_OPACITY[stripe.phase]}
-                        />
-                      ) : null}
-                      {PHASE_SKY_SHADOW_OPACITY[stripe.phase] > 0 ? (
-                        <rect
-                          x={stripe.x}
-                          y="0"
-                          width={stripe.width}
-                          height={HORIZON_Y}
-                          fill={`rgba(2,6,23,${skyShadowOpacity})`}
-                          opacity={PHASE_SKY_SHADOW_OPACITY[stripe.phase]}
-                        />
-                      ) : null}
-                    </g>
-                  );
-                })}
-                <rect
-                  x="0"
-                  y={HORIZON_Y}
-                  width={VIEW_W}
-                  height={VIEW_H - HORIZON_Y}
-                  fill="#000"
-                />
-              </g>
+                <filter
+                  id={sunAuraBlurId}
+                  x="-50%"
+                  y="-50%"
+                  width="200%"
+                  height="200%"
+                >
+                  <feGaussianBlur stdDeviation="10" />
+                </filter>
 
-              <g id="lines">
-                <line
+                <filter
+                  id={moonAuraBlurId}
+                  x="-50%"
+                  y="-50%"
+                  width="200%"
+                  height="200%"
+                >
+                  <feGaussianBlur stdDeviation="9" />
+                </filter>
+
+                <linearGradient
+                  id={belowHorizonBandGradientId}
                   x1="0"
                   y1={HORIZON_Y}
-                  x2={VIEW_W}
-                  y2={HORIZON_Y}
-                  stroke="rgba(148,163,184,0.78)"
-                  strokeWidth="0.6"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <path
-                  d={sunCurvePath}
-                  stroke="rgba(250,204,21,0.84)"
-                  strokeWidth="1.15"
-                  vectorEffect="non-scaling-stroke"
-                  fill="none"
-                />
-                <path
-                  d={moonCurvePath}
-                  stroke="rgba(226,232,240,0.76)"
-                  strokeWidth="1.05"
-                  vectorEffect="non-scaling-stroke"
-                  fill="none"
-                />
-              </g>
+                  x2="0"
+                  y2={VIEW_H}
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0%" stopColor={BELOW_HORIZON_GRADIENT_TOP} />
+                  <stop offset="58%" stopColor={BELOW_HORIZON_GRADIENT_MID} />
+                  <stop
+                    offset="100%"
+                    stopColor={BELOW_HORIZON_GRADIENT_BOTTOM}
+                  />
+                </linearGradient>
 
-              <g filter={`url(#${sunAuraBlurId})`}>
-                <circle
-                  cx={sunDotX}
-                  cy={sunDotY}
-                  r="12"
-                  fill="rgba(255,220,120,0.32)"
-                />
-              </g>
+                <linearGradient
+                  id={belowHorizonHazeGradientId}
+                  x1="0"
+                  y1={HORIZON_Y}
+                  x2="0"
+                  y2={HORIZON_Y + 6}
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0%" stopColor={BELOW_HORIZON_HAZE_TOP} />
+                  <stop offset="44%" stopColor="rgba(56,189,248,0.035)" />
+                  <stop offset="100%" stopColor={BELOW_HORIZON_HAZE_BOTTOM} />
+                </linearGradient>
 
-              <g filter={`url(#${moonAuraBlurId})`}>
-                <circle
-                  cx={moonDotX}
-                  cy={moonDotY}
-                  r="12"
-                  fill="rgba(180,210,255,0.24)"
-                />
-              </g>
+                <radialGradient
+                  id={belowHorizonLimbGradientId}
+                  cx={VIEW_W / 2}
+                  cy={VIEW_H + 8}
+                  r="84"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0%" stopColor="rgba(15,23,42,0.56)" />
+                  <stop offset="52%" stopColor="rgba(2,6,23,0.26)" />
+                  <stop offset="100%" stopColor="rgba(2,6,23,0)" />
+                </radialGradient>
 
-              <g id="markers">
-                <MoonPhaseCircle
-                  mode="g"
-                  cx={moonDotX}
-                  cy={moonDotY}
-                  r={2.1}
-                  size={15}
-                  illuminationFrac={
-                    summary.moon.illumination_fraction ?? undefined
-                  }
-                  phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
-                  variant="photo"
-                />
-                <SunDisc mode="g" cx={sunDotX} cy={sunDotY} r={1.8} size={15} />
-                {hoveredMoonPoint !== null &&
-                hoveredMoonVisualX !== null &&
-                hoveredMoonVisualY !== null ? (
-                  <g id="moon-hover-marker" pointerEvents="none">
-                    <line
-                      data-testid="moon-hover-guide"
-                      x1={hoveredMoonVisualX}
-                      y1="0"
-                      x2={hoveredMoonVisualX}
-                      y2={VIEW_H}
-                      stroke="rgba(226,232,240,0.22)"
-                      strokeWidth="0.45"
-                      strokeDasharray="1.2 1.7"
-                      vectorEffect="non-scaling-stroke"
+                {skyStripes.map((stripe, idx) => (
+                  <clipPath
+                    key={`${idPrefix}-sky-stripe-${idx}`}
+                    id={`${idPrefix}-sky-stripe-${idx}`}
+                  >
+                    <rect
+                      x={stripe.x}
+                      y="0"
+                      width={stripe.width}
+                      height={HORIZON_Y}
                     />
-                    <circle
-                      cx={hoveredMoonVisualX}
-                      cy={hoveredMoonVisualY}
-                      r="2.1"
-                      fill="rgba(191,219,254,0.12)"
-                      stroke="rgba(226,232,240,0.55)"
-                      strokeWidth="0.45"
-                      vectorEffect="non-scaling-stroke"
+                  </clipPath>
+                ))}
+              </defs>
+
+              <g clipPath={`url(#${plotClipId})`}>
+                <g id="bg">
+                  <rect
+                    x="0"
+                    y="0"
+                    width={VIEW_W}
+                    height={HORIZON_Y}
+                    fill="#020617"
+                  />
+                  {skyStripes.map((stripe, idx) => {
+                    const weatherOpacity =
+                      PHASE_WEATHER_IMAGE_OPACITY[stripe.phase] *
+                      weatherSkyStrength;
+                    const nightOpacity =
+                      PHASE_NIGHT_IMAGE_OPACITY[stripe.phase] * nightSkyStrength;
+
+                    return (
+                      <g
+                        key={`sky-col-${idx}`}
+                        clipPath={`url(#${idPrefix}-sky-stripe-${idx})`}
+                      >
+                        {weatherOpacity > 0 ? (
+                          <image
+                            href={weatherSkyImageUrl}
+                            x="0"
+                            y="0"
+                            width={VIEW_W}
+                            height={HORIZON_Y}
+                            preserveAspectRatio="xMidYMid slice"
+                            opacity={weatherOpacity}
+                          />
+                        ) : null}
+                        {nightOpacity > 0 ? (
+                          <image
+                            href={NIGHT_SKY_IMAGE_URL}
+                            x={stripe.x}
+                            y="0"
+                            width={stripe.width}
+                            height={HORIZON_Y}
+                            preserveAspectRatio="xMidYMid slice"
+                            opacity={nightOpacity}
+                          />
+                        ) : null}
+                        {PHASE_NIGHT_SHADE_OPACITY[stripe.phase] > 0 ? (
+                          <rect
+                            x={stripe.x}
+                            y="0"
+                            width={stripe.width}
+                            height={HORIZON_Y}
+                            fill="rgba(0,0,0,1)"
+                            opacity={PHASE_NIGHT_SHADE_OPACITY[stripe.phase]}
+                          />
+                        ) : null}
+                        <rect
+                          x={stripe.x}
+                          y="0"
+                          width={stripe.width}
+                          height={HORIZON_Y}
+                          fill={TWILIGHT_BAND_COLOR[stripe.phase]}
+                          opacity={PHASE_TINT_OPACITY[stripe.phase]}
+                        />
+                        {PHASE_ATMOSPHERE_OPACITY[stripe.phase] > 0 ? (
+                          <rect
+                            x={stripe.x}
+                            y="0"
+                            width={stripe.width}
+                            height={HORIZON_Y}
+                            fill={`rgba(226,232,240,${weatherAtmosphereOpacity})`}
+                            opacity={PHASE_ATMOSPHERE_OPACITY[stripe.phase]}
+                          />
+                        ) : null}
+                        {PHASE_SKY_SHADOW_OPACITY[stripe.phase] > 0 ? (
+                          <rect
+                            x={stripe.x}
+                            y="0"
+                            width={stripe.width}
+                            height={HORIZON_Y}
+                            fill={`rgba(2,6,23,${skyShadowOpacity})`}
+                            opacity={PHASE_SKY_SHADOW_OPACITY[stripe.phase]}
+                          />
+                        ) : null}
+                      </g>
+                    );
+                  })}
+                  <g
+                    id="below-horizon"
+                    data-testid="below-horizon-band"
+                    aria-hidden="true"
+                    clipPath={`url(#${belowHorizonClipId})`}
+                    pointerEvents="none"
+                  >
+                    <rect
+                      x="0"
+                      y={HORIZON_Y}
+                      width={VIEW_W}
+                      height={VIEW_H - HORIZON_Y}
+                      fill={`url(#${belowHorizonBandGradientId})`}
                     />
-                    <circle
-                      data-testid="moon-hover-marker"
-                      cx={hoveredMoonVisualX}
-                      cy={hoveredMoonVisualY}
-                      r="0.95"
-                      fill="rgba(248,250,252,0.96)"
+                    <rect
+                      data-testid="below-horizon-haze"
+                      x="0"
+                      y={HORIZON_Y}
+                      width={VIEW_W}
+                      height="6"
+                      fill={`url(#${belowHorizonHazeGradientId})`}
+                    />
+                    <ellipse
+                      data-testid="below-horizon-depth-shadow"
+                      cx={VIEW_W / 2}
+                      cy={VIEW_H + 8}
+                      rx="112"
+                      ry="23"
+                      fill={`url(#${belowHorizonLimbGradientId})`}
+                    />
+                    <path
+                      data-testid="below-horizon-limb-shadow"
+                      d={`M6 ${VIEW_H - 3.5}C38 ${VIEW_H - 8.2} 122 ${
+                        VIEW_H - 8.2
+                      } 154 ${VIEW_H - 3.5}`}
+                      fill="none"
+                      stroke={BELOW_HORIZON_LIMB_STROKE}
+                      strokeWidth="0.46"
+                      vectorEffect="non-scaling-stroke"
                     />
                   </g>
-                ) : null}
+                </g>
+
+                <g id="lines">
+                  <line
+                    data-testid="horizon-glow-line"
+                    x1="0"
+                    y1={HORIZON_Y}
+                    x2={VIEW_W}
+                    y2={HORIZON_Y}
+                    stroke={HORIZON_LINE_GLOW_STROKE}
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path
+                    d={sunCurvePath}
+                    stroke="rgba(250,204,21,0.84)"
+                    strokeWidth="1.15"
+                    vectorEffect="non-scaling-stroke"
+                    fill="none"
+                  />
+                  <path
+                    d={moonCurvePath}
+                    stroke="rgba(226,232,240,0.76)"
+                    strokeWidth="1.05"
+                    vectorEffect="non-scaling-stroke"
+                    fill="none"
+                  />
+                  <line
+                    data-testid="horizon-line"
+                    x1="0"
+                    y1={HORIZON_Y}
+                    x2={VIEW_W}
+                    y2={HORIZON_Y}
+                    stroke={HORIZON_LINE_STROKE}
+                    strokeWidth="0.58"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+
+                <g filter={`url(#${sunAuraBlurId})`}>
+                  <circle
+                    cx={sunDotX}
+                    cy={sunDotY}
+                    r="12"
+                    fill="rgba(255,220,120,0.32)"
+                  />
+                </g>
+
+                <g filter={`url(#${moonAuraBlurId})`}>
+                  <circle
+                    cx={moonDotX}
+                    cy={moonDotY}
+                    r="12"
+                    fill="rgba(180,210,255,0.24)"
+                  />
+                </g>
+
+                <g id="markers">
+                  <MoonPhaseCircle
+                    mode="g"
+                    cx={moonDotX}
+                    cy={moonDotY}
+                    r={2.1}
+                    size={15}
+                    illuminationFrac={
+                      summary.moon.illumination_fraction ?? undefined
+                    }
+                    phaseAngleDeg={summary.moon.phase_angle_deg ?? undefined}
+                    variant="photo"
+                  />
+                  <SunDisc mode="g" cx={sunDotX} cy={sunDotY} r={1.8} size={15} />
+                  {hoveredMoonPoint !== null &&
+                  hoveredMoonVisualX !== null &&
+                  hoveredMoonVisualY !== null ? (
+                    <g id="moon-hover-marker" pointerEvents="none">
+                      <line
+                        data-testid="moon-hover-guide"
+                        x1={hoveredMoonVisualX}
+                        y1="0"
+                        x2={hoveredMoonVisualX}
+                        y2={VIEW_H}
+                        stroke="rgba(226,232,240,0.22)"
+                        strokeWidth="0.45"
+                        strokeDasharray="1.2 1.7"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <circle
+                        cx={hoveredMoonVisualX}
+                        cy={hoveredMoonVisualY}
+                        r="2.1"
+                        fill="rgba(191,219,254,0.12)"
+                        stroke="rgba(226,232,240,0.55)"
+                        strokeWidth="0.45"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <circle
+                        data-testid="moon-hover-marker"
+                        cx={hoveredMoonVisualX}
+                        cy={hoveredMoonVisualY}
+                        r="0.95"
+                        fill="rgba(248,250,252,0.96)"
+                      />
+                    </g>
+                  ) : null}
+                </g>
               </g>
-            </g>
-          </svg>
-          {hoveredMoonPoint !== null && hoveredMoonTooltipLayout !== null ? (
-            <div
-              data-testid="moon-hover-tooltip"
-              className={`pointer-events-none absolute z-10 w-[10.5rem] rounded-lg border border-white/12 bg-slate-950/88 px-2.5 py-2 text-[10px] leading-[1.25] text-slate-100 shadow-lg shadow-black/35 ring-1 ring-black/20 backdrop-blur-md transition-opacity duration-150 ${
-                hoveredMoonTooltipLayout.verticalAlign === "top"
-                  ? "top-2"
-                  : "bottom-2"
-              } ${
-                hoveredMoonTooltipLayout.horizontalAlign === "start"
-                  ? "translate-x-0"
-                  : hoveredMoonTooltipLayout.horizontalAlign === "end"
-                    ? "-translate-x-full"
-                    : "-translate-x-1/2"
-              }`}
-              style={{
-                left: `${hoveredMoonTooltipLayout.leftPct}%`,
-                maxWidth: "calc(100% - 0.75rem)",
-              }}
-            >
-              <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
-                <span className="text-slate-400">Time</span>
-                <span>{formatInTimeZone(new Date(hoveredMoonPoint.ms), tz, "h:mm a")}</span>
-                <span className="text-slate-400">Moon altitude</span>
-                <span>{formatRoundedDegrees(hoveredMoonPoint.altitudeDeg)}</span>
-                <span className="text-slate-400">Direction</span>
-                <span>{formatAzimuthWithDirection(hoveredMoonPoint.azimuthDeg)}</span>
-                <span className="text-slate-400">Status</span>
-                <span>
-                  {hoveredMoonPoint.aboveHorizon
-                    ? "Above horizon"
-                    : "Below horizon"}
-                </span>
+            </svg>
+            {hoveredMoonPoint !== null && hoveredMoonTooltipLayout !== null ? (
+              <div
+                data-testid="moon-hover-tooltip"
+                className={`pointer-events-none absolute z-10 w-[10.5rem] rounded-lg border border-white/12 bg-slate-950/88 px-2.5 py-2 text-[10px] leading-[1.25] text-slate-100 shadow-lg shadow-black/35 ring-1 ring-black/20 backdrop-blur-md transition-opacity duration-150 ${
+                  hoveredMoonTooltipLayout.verticalAlign === "top"
+                    ? "top-2"
+                    : "bottom-2"
+                } ${
+                  hoveredMoonTooltipLayout.horizontalAlign === "start"
+                    ? "translate-x-0"
+                    : hoveredMoonTooltipLayout.horizontalAlign === "end"
+                      ? "-translate-x-full"
+                      : "-translate-x-1/2"
+                }`}
+                style={{
+                  left: `${hoveredMoonTooltipLayout.leftPct}%`,
+                  maxWidth: "calc(100% - 0.75rem)",
+                }}
+              >
+                <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                  <span className="text-slate-400">Time</span>
+                  <span>{formatInTimeZone(new Date(hoveredMoonPoint.ms), tz, "h:mm a")}</span>
+                  <span className="text-slate-400">Moon altitude</span>
+                  <span>{formatRoundedDegrees(hoveredMoonPoint.altitudeDeg)}</span>
+                  <span className="text-slate-400">Direction</span>
+                  <span>{formatAzimuthWithDirection(hoveredMoonPoint.azimuthDeg)}</span>
+                  <span className="text-slate-400">Status</span>
+                  <span>
+                    {hoveredMoonPoint.aboveHorizon
+                      ? "Above horizon"
+                      : "Below horizon"}
+                  </span>
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {objectLegendItems.map((item) => (
+            <div
+              key={item.key}
+              className={`${DASHBOARD_METRIC_TILE_CLASS} flex items-center gap-2 px-2.5 py-1.5`}
+            >
+              {item.marker === "line" ? (
+                <span className="block h-px w-3 rounded-full bg-slate-300/78" />
+              ) : (
+                <span
+                  className={`h-2 w-2 rounded-full ring-1 ring-white/18 ${item.markerClass}`}
+                />
+              )}
+              <span className="text-[11px] font-medium text-slate-200/80">
+                {item.label}
+              </span>
+              {item.value ? (
+                <span className="text-[12px] font-semibold tabular-nums text-slate-50">
+                  {item.value}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+
+        <section className={`${DASHBOARD_SURFACE_CLASS} bg-white/[0.02] px-2.5 py-2`}>
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className={DASHBOARD_METRIC_LABEL_CLASS}>Twilight windows</div>
+            <div className="text-[10px] text-slate-300/52">
+              Sunrise and sunset windows
+            </div>
+          </div>
+          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-3">
+            {twilightWindowItems.map((item) => {
+              const isActive = twilightPhase === item.key;
+
+              return (
+                <div
+                  key={item.key}
+                  className={`${DASHBOARD_METRIC_TILE_CLASS} min-w-0 px-2.5 py-2 ${
+                    isActive
+                      ? "border border-white/12 bg-white/[0.045] ring-sky-300/14"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2 w-2 rounded-full ring-1 ring-white/20"
+                      style={{ backgroundColor: TWILIGHT_BAND_COLOR[item.key] }}
+                    />
+                    <span className="text-[11px] font-medium text-slate-100/90">
+                      {item.label}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                    {item.frames.map((frame) => (
+                      <div
+                        key={frame.key}
+                        className="min-w-0 rounded-[0.8rem] bg-black/10 px-2 py-1.5 ring-1 ring-inset ring-white/6"
+                      >
+                        <div className="text-[9px] uppercase tracking-[0.18em] text-slate-300/56">
+                          {frame.label}
+                        </div>
+                        <div className="mt-0.5 text-[11px] font-semibold leading-tight tabular-nums text-slate-50">
+                          {formatClockRange(frame.startIso, frame.endIso, tz)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 text-[10px] text-slate-300/62">
+                    {item.helper}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );

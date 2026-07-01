@@ -15,22 +15,11 @@ import {
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PANEL_EYEBROW_CLASS,
   DASHBOARD_VALUE_LARGE_CLASS,
+  formatClockTime,
   getViewingAssessment,
+  getLunarVisibilityState,
   weatherLabel,
 } from "./moonDashboardShared";
-
-function formatClockTime(iso: string | null | undefined, tz: string): string {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: tz,
-  }).format(d);
-}
 
 function formatPercent(value: number | null): string {
   return typeof value === "number" ? `${Math.round(value)}%` : "—";
@@ -67,28 +56,6 @@ function getLocalHour(iso: string | null | undefined, tz: string): number | null
 function formatDirectionDetail(direction: string | null, detail: string): string {
   if (!direction) return detail;
   return `Look ${direction} · ${detail}`;
-}
-
-function formatStatusHelper(
-  status: string,
-  bestViewingValue: string,
-): string {
-  if (status === "Visible now") {
-    if (bestViewingValue.startsWith("After ")) {
-      return "Viewing may change as daylight fades.";
-    }
-    if (bestViewingValue === "Now") return "Good viewing right now.";
-    return "Visibility may change through the night.";
-  }
-
-  if (status === "Below horizon") {
-    if (bestViewingValue.startsWith("After ")) return "Best viewing later tonight.";
-    if (bestViewingValue === "If skies clear") return "Wait for a clearer window.";
-    if (bestViewingValue === "If clouds thin") return "Wait for thinner clouds.";
-    return "Watching for the next window.";
-  }
-
-  return "Status is updating.";
 }
 
 function formatMoonriseHelper(): string {
@@ -182,27 +149,6 @@ function formatWeatherContext(
     : conditionLabel;
 }
 
-function getVisibilityState(isUp: boolean | null | undefined) {
-  if (isUp === true) {
-    return {
-      badge: "Visible now",
-      badgeClass: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100/90",
-    };
-  }
-
-  if (isUp === false) {
-    return {
-      badge: "Below horizon",
-      badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
-    };
-  }
-
-  return {
-    badge: "Status pending",
-    badgeClass: "border-white/10 bg-white/[0.04] text-slate-200/82",
-  };
-}
-
 function formatBestViewing({
   nauticalDusk,
   isDarkEnoughForViewing,
@@ -267,7 +213,7 @@ function formatBestViewing({
     if (nextDarkLabel !== "—") {
       return {
         label: "Best viewing tonight",
-        value: `After ${nextDarkLabel.replace(/\s+[A-Z]{2,5}$/, "")}`,
+        value: `After ${nextDarkLabel}`,
         direction: nextDarkDirection,
         detail: "If skies clear",
       };
@@ -294,7 +240,7 @@ function formatBestViewing({
     if (nextDarkLabel !== "—") {
       return {
         label: "Best viewing tonight",
-        value: `After ${nextDarkLabel.replace(/\s+[A-Z]{2,5}$/, "")}`,
+        value: `After ${nextDarkLabel}`,
         direction: nextDarkDirection,
         detail: "If clouds thin",
       };
@@ -320,7 +266,7 @@ function formatBestViewing({
   if (nextDarkLabel !== "—") {
     return {
       label: "Best viewing tonight",
-      value: `After ${nextDarkLabel.replace(/\s+[A-Z]{2,5}$/, "")}`,
+      value: `After ${nextDarkLabel}`,
       direction: nextDarkDirection,
       detail: "Nautical twilight",
     };
@@ -411,7 +357,12 @@ export default function MoonTonightHero({
     moon.moonrise,
     moon.moonset,
   ].filter((value) => value === null || value === undefined).length;
-  const visibilityState = getVisibilityState(moon.is_up);
+  const visibilityState = getLunarVisibilityState({
+    moon,
+    sun: summary.sun,
+    twilight: summary.twilight,
+    isDarkEnoughForViewing: summary.visibility.is_dark_enough_for_viewing,
+  });
   const astronomyStatus =
     summaryQ.error
       ? {
@@ -471,11 +422,11 @@ export default function MoonTonightHero({
       detail: formatMoonsetHelper(moon.moonset, tz),
     },
   ].filter((item) => item.value !== "—");
-  const statusValue = visibilityState.badge;
-  const statusDetail = formatStatusHelper(statusValue, bestViewing.value);
+  const statusValue = visibilityState.label;
+  const statusDetail = visibilityState.detail;
   const metadataParts = [
     `${formatPercent(moon.illumination_percent)} illuminated`,
-    statusValue,
+    visibilityState.badge,
   ].filter(Boolean);
   const bestViewingHelper = formatDirectionDetail(bestViewing.direction, bestViewing.detail);
 

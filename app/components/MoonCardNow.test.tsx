@@ -39,7 +39,7 @@ describe("MoonCardNow", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the full moon summary with weather details", () => {
+  it("renders the full moon summary with visibility and key event details", () => {
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
         data: buildCanonicalMoonCardResponse(),
@@ -57,17 +57,19 @@ describe("MoonCardNow", () => {
     expect(screen.getByText("Moon now")).toBeInTheDocument();
     expect(screen.getByText("Waxing Gibbous")).toBeInTheDocument();
     expect(screen.getAllByText("74%")).toHaveLength(2);
-    expect(screen.getByText("Visible now")).toBeInTheDocument();
+    expect(screen.getAllByText("Visible now")).toHaveLength(2);
     expect(screen.getByText("Peak altitude")).toBeInTheDocument();
     expect(screen.getByText("Apr 5, 7:20 AM")).toBeInTheDocument();
     expect(screen.getByText("32°")).toBeInTheDocument();
     expect(screen.getByText("SE (143°)")).toBeInTheDocument();
-    expect(screen.getByText("Weather Clear · 18% cloud")).toBeInTheDocument();
-    expect(screen.getByText("Source: python_microservice")).toBeInTheDocument();
-    expect(screen.getByText("Updated 6:35 AM UTC")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Dark enough to spot if skies are clear."),
+    ).toHaveLength(2);
+    expect(screen.getByText("Relative to horizon")).toBeInTheDocument();
+    expect(screen.getByText("Compass bearing")).toBeInTheDocument();
   });
 
-  it("renders degraded astronomy and unavailable weather states without breaking the card", () => {
+  it("renders degraded astronomy states without breaking the card", () => {
     mockUseMoonCard.mockReturnValue(
       buildQueryResult({
         data: buildCanonicalMoonCardResponse({
@@ -101,10 +103,9 @@ describe("MoonCardNow", () => {
     expect(
       screen.getByText("Astronomy data is degraded. Some details may be limited."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Weather unavailable")).toBeInTheDocument();
     expect(screen.getByText("Peak altitude")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
-    expect(screen.getByText("Visible now")).toBeInTheDocument();
+    expect(screen.getByText("Status pending")).toBeInTheDocument();
   });
 
   it("renders the error shell when moon data is unavailable", () => {

@@ -97,7 +97,7 @@ describe("MoonSkySummaryBanner", () => {
 
     expect(
       screen.getByText(
-        "Moon rises at 1:15 AM and sets at 1:45 PM. Mostly clear skies today, but Daylight conditions are not dark enough for viewing. Moon should be visible around nautical twilight at 8:12 PM.",
+        "Moon rises at 1:15 AM and sets at 1:45 PM. Mostly clear skies today, but Daylight conditions are not dark enough for viewing. The moon may stand out more around nautical twilight at 8:12 PM.",
       ),
     ).toBeInTheDocument();
   });

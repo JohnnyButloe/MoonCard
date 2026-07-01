@@ -17,20 +17,16 @@ vi.mock("../providers/LocationProvider", () => ({
   useLocation: mockUseLocation,
 }));
 
-vi.mock("./MoonCardNow", () => ({
-  default: () => <div>moon-now-panel</div>,
-}));
-
-vi.mock("./MoonSkySummaryBanner", () => ({
-  default: () => <div>moon-sky-summary-banner</div>,
-}));
-
 vi.mock("./MoonContextCard", () => ({
   default: () => <div>moon-context-panel</div>,
 }));
 
 vi.mock("./MoonGraph", () => ({
   default: () => <div>moon-graph-panel</div>,
+}));
+
+vi.mock("./MoonSupportingDetails", () => ({
+  default: () => <div>moon-supporting-details-panel</div>,
 }));
 
 vi.mock("./MoonPhaseCalendar", () => ({
@@ -51,6 +47,10 @@ vi.mock("./LocationSearch", () => ({
 
 vi.mock("./LocationOnboarding", () => ({
   default: () => <div>location-onboarding</div>,
+}));
+
+vi.mock("./MoonTonightHero", () => ({
+  default: () => <div>moon-tonight-hero-panel</div>,
 }));
 
 import DashboardClient from "./DashboardClient";
@@ -83,12 +83,22 @@ describe("DashboardClient", () => {
 
     render(<DashboardClient fallback={fallbackLocation} />);
 
-    expect(screen.getByText("Mooncard")).toBeInTheDocument();
-    expect(screen.getByText("Today's Sky Timeline")).toBeInTheDocument();
-    expect(screen.getByText("Lunar Calendar")).toBeInTheDocument();
-    expect(screen.getByText("moon-sky-summary-banner")).toBeInTheDocument();
-    expect(screen.getByText("moon-now-panel")).toBeInTheDocument();
+    expect(screen.getByText("MoonCard")).toBeInTheDocument();
+    expect(screen.getByLabelText("Moon overview")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Viewing conditions and weather"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Today's sky timeline")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Supporting lunar details"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Lunar calendar")).toBeInTheDocument();
+    expect(screen.getByLabelText("Next lunar events")).toBeInTheDocument();
+    expect(screen.getByText("moon-tonight-hero-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-context-panel")).toBeInTheDocument();
+    expect(
+      screen.getByText("moon-supporting-details-panel"),
+    ).toBeInTheDocument();
     expect(screen.getByText("moon-phase-calendar-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-calendar-preview-panel")).toBeInTheDocument();
     expect(screen.getByText("moon-graph-panel")).toBeInTheDocument();
