@@ -2,6 +2,7 @@
 
 import { useMoonCard } from "../hooks/useAstronomy";
 import { useWeatherNow } from "../hooks/useWeather";
+import type { MoonCardMoonPathSample } from "../lib/mooncard/types";
 import type { WeatherCondition } from "../providers/weather";
 import {
   DashboardPanelState,
@@ -82,6 +83,10 @@ function toEventMs(iso: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function toSampleMs(sample: MoonCardMoonPathSample): number | null {
+  return toEventMs(sample.time_utc || sample.time_local);
+}
+
 function formatMeridianDirection(lat: number): string {
   return lat >= 0 ? "south" : "north";
 }
@@ -149,7 +154,218 @@ function formatWeatherContext(
     : conditionLabel;
 }
 
+type BestViewingTarget =
+  | {
+      status: "target";
+      source: "high_moon" | "path_sample" | "window_start";
+      iso: string;
+      altitudeDeg: number | null;
+      azimuthDeg: number | null;
+    }
+  | {
+      status: "now";
+      source: "past_peak";
+      iso: string | null;
+    }
+  | {
+      status: "unavailable";
+      reason: "no_window" | "missing_moon_timing";
+    };
+
+function getDarkWindowStartMs({
+  nowMs,
+  nauticalDusk,
+  nextTransition,
+  isDarkEnoughForViewing,
+}: {
+  nowMs: number | null;
+  nauticalDusk: string | null | undefined;
+  nextTransition: string | null | undefined;
+  isDarkEnoughForViewing: boolean | null | undefined;
+}): number | null {
+  if (isDarkEnoughForViewing === true) return null;
+
+  const nauticalMs = toEventMs(nauticalDusk);
+  const transitionMs = toEventMs(nextTransition);
+
+  if (nowMs === null) {
+    return nauticalMs ?? transitionMs;
+  }
+
+  if (nauticalMs !== null && nauticalMs >= nowMs) return nauticalMs;
+  if (transitionMs !== null && transitionMs >= nowMs) return transitionMs;
+
+  return nauticalMs ?? transitionMs;
+}
+
+function latestMs(values: Array<number | null>): number | null {
+  const finiteValues = values.filter((value): value is number => value !== null);
+  return finiteValues.length > 0 ? Math.max(...finiteValues) : null;
+}
+
+function isWithinWindow(
+  valueMs: number,
+  startMs: number | null,
+  endMs: number | null,
+): boolean {
+  if (startMs !== null && valueMs < startMs) return false;
+  if (endMs !== null && valueMs > endMs) return false;
+  return true;
+}
+
+export function selectBestViewingTarget({
+  currentIso,
+  nauticalDusk,
+  isDarkEnoughForViewing,
+  nextTransition,
+  currentIsUp,
+  moonrise,
+  highMoon,
+  moonset,
+  pathSamples,
+}: {
+  currentIso: string | null | undefined;
+  nauticalDusk: string | null | undefined;
+  isDarkEnoughForViewing: boolean | null | undefined;
+  nextTransition: string | null | undefined;
+  currentIsUp: boolean | null | undefined;
+  moonrise: string | null | undefined;
+  highMoon: string | null | undefined;
+  moonset: string | null | undefined;
+  pathSamples: MoonCardMoonPathSample[] | null | undefined;
+}): BestViewingTarget {
+  const nowMs = toEventMs(currentIso);
+  const riseMs = toEventMs(moonrise);
+  const highMs = toEventMs(highMoon);
+  const rawSetMs = toEventMs(moonset);
+  const setMs =
+    rawSetMs !== null && riseMs !== null && rawSetMs <= riseMs ? null : rawSetMs;
+  const darkMs = getDarkWindowStartMs({
+    nowMs,
+    nauticalDusk,
+    nextTransition,
+    isDarkEnoughForViewing,
+  });
+  const startMs = latestMs([nowMs, riseMs, darkMs]);
+  const hasKnownMoonWindow =
+    riseMs !== null ||
+    highMs !== null ||
+    currentIsUp === true ||
+    (pathSamples ?? []).some((sample) => sample.above_horizon === true);
+
+  if (!hasKnownMoonWindow) {
+    return { status: "unavailable", reason: "missing_moon_timing" };
+  }
+
+  if (setMs !== null && startMs !== null && setMs < startMs) {
+    return { status: "unavailable", reason: "no_window" };
+  }
+
+  if (
+    highMoon &&
+    highMs !== null &&
+    (riseMs === null || highMs >= riseMs) &&
+    isWithinWindow(highMs, startMs, setMs)
+  ) {
+    return {
+      status: "target",
+      source: "high_moon",
+      iso: highMoon,
+      altitudeDeg: null,
+      azimuthDeg: null,
+    };
+  }
+
+  if (
+    highMs !== null &&
+    nowMs !== null &&
+    highMs < nowMs &&
+    currentIsUp === true &&
+    (riseMs === null || nowMs >= riseMs) &&
+    (setMs === null || nowMs <= setMs) &&
+    (darkMs === null || nowMs >= darkMs)
+  ) {
+    return {
+      status: "now",
+      source: "past_peak",
+      iso: currentIso ?? null,
+    };
+  }
+
+  const bestSample = (pathSamples ?? [])
+    .map((sample) => ({ sample, sampleMs: toSampleMs(sample) }))
+    .filter(
+      (
+        item,
+      ): item is {
+        sample: MoonCardMoonPathSample;
+        sampleMs: number;
+      } =>
+        item.sampleMs !== null &&
+        item.sample.above_horizon === true &&
+        (riseMs === null || item.sampleMs >= riseMs) &&
+        isWithinWindow(item.sampleMs, startMs, setMs),
+    )
+    .sort((a, b) => {
+      const altitudeDelta = b.sample.altitude_deg - a.sample.altitude_deg;
+      if (altitudeDelta !== 0) return altitudeDelta;
+      return a.sampleMs - b.sampleMs;
+    })[0];
+
+  if (bestSample) {
+    return {
+      status: "target",
+      source: "path_sample",
+      iso: bestSample.sample.time_utc || bestSample.sample.time_local,
+      altitudeDeg: bestSample.sample.altitude_deg,
+      azimuthDeg: bestSample.sample.azimuth_deg,
+    };
+  }
+
+  if (startMs !== null && (riseMs !== null || currentIsUp === true)) {
+    const startIso = new Date(startMs).toISOString();
+    return {
+      status: "target",
+      source: "window_start",
+      iso: startIso,
+      altitudeDeg: null,
+      azimuthDeg: null,
+    };
+  }
+
+  return { status: "unavailable", reason: "no_window" };
+}
+
+function formatBestViewingDetail(
+  target: BestViewingTarget,
+  weatherImpact: ReturnType<typeof getViewingAssessment>["weatherImpact"],
+  weatherContext: string,
+): string {
+  const weatherPrefix =
+    weatherImpact === "poor"
+      ? "If skies clear"
+      : weatherImpact === "limited"
+        ? "If clouds thin"
+        : null;
+  const targetDetail =
+    target.status === "now"
+      ? "Past peak · still above horizon."
+      : target.status === "target" && target.source === "high_moon"
+        ? "Peak altitude."
+        : target.status === "target" && target.source === "path_sample"
+          ? typeof target.altitudeDeg === "number"
+            ? `${Math.round(target.altitudeDeg)}° altitude.`
+            : "Highest sampled altitude."
+          : target.status === "target"
+            ? "Moon above horizon."
+            : "Next viewing window unavailable.";
+
+  if (!weatherPrefix) return targetDetail;
+  return `${weatherPrefix} · ${weatherContext}`;
+}
+
 function formatBestViewing({
+  currentIso,
   nauticalDusk,
   isDarkEnoughForViewing,
   nextTransition,
@@ -162,8 +378,10 @@ function formatBestViewing({
   moonrise,
   highMoon,
   moonset,
+  pathSamples,
   tz,
 }: {
+  currentIso: string | null | undefined;
   nauticalDusk: string | null | undefined;
   isDarkEnoughForViewing: boolean | null | undefined;
   nextTransition: string | null | undefined;
@@ -176,107 +394,86 @@ function formatBestViewing({
   moonrise: string | null | undefined;
   highMoon: string | null | undefined;
   moonset: string | null | undefined;
+  pathSamples: MoonCardMoonPathSample[] | null | undefined;
   tz: string;
 }) {
   const weatherContext = formatWeatherContext(weatherCondition, weatherCloudCover);
-  const nextDarkIso = nauticalDusk ?? nextTransition;
-  const nextDarkLabel = formatClockTime(nextDarkIso, tz);
-  const currentDirection = getBestViewingDirection({
-    targetIso: null,
-    lat,
-    currentAzimuth,
+  const target = selectBestViewingTarget({
+    currentIso,
+    nauticalDusk,
+    isDarkEnoughForViewing,
+    nextTransition,
     currentIsUp,
     moonrise,
     highMoon,
     moonset,
-  });
-  const nextDarkDirection = getBestViewingDirection({
-    targetIso: nextDarkIso,
-    lat,
-    currentAzimuth,
-    currentIsUp,
-    moonrise,
-    highMoon,
-    moonset,
+    pathSamples,
   });
 
-  if (viewingAssessment.weatherImpact === "poor") {
-    if (isDarkEnoughForViewing === true) {
-      return {
-        label: "Best viewing tonight",
-        value: "If skies clear",
-        direction: currentDirection,
-        detail: weatherContext,
-      };
-    }
-
-    if (nextDarkLabel !== "—") {
-      return {
-        label: "Best viewing tonight",
-        value: `After ${nextDarkLabel}`,
-        direction: nextDarkDirection,
-        detail: "If skies clear",
-      };
-    }
-
+  if (target.status === "unavailable") {
     return {
       label: "Best viewing tonight",
-      value: "If skies clear",
-      direction: currentDirection,
-      detail: weatherContext,
+      value: "Unavailable",
+      direction: null,
+      detail:
+        target.reason === "missing_moon_timing"
+          ? "Moon timing unavailable."
+          : "Next viewing window unavailable.",
     };
   }
 
-  if (viewingAssessment.weatherImpact === "limited") {
-    if (isDarkEnoughForViewing === true) {
-      return {
-        label: "Best viewing tonight",
-        value: "If clouds thin",
-        direction: currentDirection,
-        detail: weatherContext,
-      };
-    }
+  const direction =
+    target.status === "now"
+      ? getBestViewingDirection({
+          targetIso: null,
+          lat,
+          currentAzimuth,
+          currentIsUp,
+          moonrise,
+          highMoon,
+          moonset,
+        })
+      : target.source === "high_moon"
+        ? formatMeridianDirection(lat)
+        : target.source === "path_sample"
+          ? formatDirectionWord(target.azimuthDeg)
+          : getBestViewingDirection({
+              targetIso: target.iso,
+              lat,
+              currentAzimuth,
+              currentIsUp,
+              moonrise,
+              highMoon,
+              moonset,
+            });
+  const detail = formatBestViewingDetail(
+    target,
+    viewingAssessment.weatherImpact,
+    weatherContext,
+  );
 
-    if (nextDarkLabel !== "—") {
-      return {
-        label: "Best viewing tonight",
-        value: `After ${nextDarkLabel}`,
-        direction: nextDarkDirection,
-        detail: "If clouds thin",
-      };
-    }
-
-    return {
-      label: "Best viewing tonight",
-      value: "If clouds thin",
-      direction: currentDirection,
-      detail: weatherContext,
-    };
-  }
-
-  if (isDarkEnoughForViewing === true) {
+  if (target.status === "now") {
     return {
       label: "Best viewing tonight",
       value: "Now",
-      direction: currentDirection,
-      detail: "Dark enough for viewing.",
+      direction,
+      detail,
     };
   }
 
-  if (nextDarkLabel !== "—") {
-    return {
-      label: "Best viewing tonight",
-      value: `After ${nextDarkLabel}`,
-      direction: nextDarkDirection,
-      detail: "Nautical twilight",
-    };
-  }
+  const targetLabel = formatClockTime(target.iso, tz);
+  const value =
+    target.source === "high_moon"
+      ? `Peak at ${targetLabel}`
+      : target.source === "path_sample"
+        ? targetLabel
+        : `After ${targetLabel}`;
 
   return {
     label: "Best viewing tonight",
-    value: "Unavailable",
-    direction: null,
-    detail: "Next dark window unavailable.",
+    value,
+    direction,
+    detail,
   };
 }
 
@@ -396,6 +593,7 @@ export default function MoonTonightHero({
     weatherCloudCover: weatherQ.data?.cloudCoverPct,
   });
   const bestViewing = formatBestViewing({
+    currentIso: summary.meta.timestamp_iso,
     nauticalDusk: summary.twilight.nautical_dusk,
     isDarkEnoughForViewing: summary.visibility.is_dark_enough_for_viewing,
     nextTransition: summary.twilight.next_transition,
@@ -408,6 +606,7 @@ export default function MoonTonightHero({
     moonrise: moon.moonrise,
     highMoon: moon.high_moon,
     moonset: moon.moonset,
+    pathSamples: moon.path?.samples,
     tz,
   });
   const horizonItems = [
@@ -426,7 +625,6 @@ export default function MoonTonightHero({
   const statusDetail = visibilityState.detail;
   const metadataParts = [
     `${formatPercent(moon.illumination_percent)} illuminated`,
-    visibilityState.badge,
   ].filter(Boolean);
   const bestViewingHelper = formatDirectionDetail(bestViewing.direction, bestViewing.detail);
 
@@ -471,12 +669,12 @@ export default function MoonTonightHero({
             </div>
 
             <div className="min-w-0 space-y-1 sm:pt-0.5">
-              <div className={DASHBOARD_METRIC_LABEL_CLASS}>{bestViewing.label}</div>
+              <div className={DASHBOARD_METRIC_LABEL_CLASS}>Now</div>
               <div className="text-[1.12rem] font-semibold leading-tight text-slate-100 sm:text-[1.24rem]">
-                {bestViewing.value}
+                {statusValue}
               </div>
               <div className="text-[11.5px] font-medium leading-tight text-slate-100/88 sm:text-[12px]">
-                {bestViewingHelper}
+                {statusDetail}
               </div>
             </div>
           </section>
@@ -485,9 +683,9 @@ export default function MoonTonightHero({
             {[
               ...horizonItems,
               {
-                label: "Now",
-                value: statusValue,
-                detail: statusDetail,
+                label: bestViewing.label,
+                value: bestViewing.value,
+                detail: bestViewingHelper,
               },
             ].map((item) => (
               <div key={item.label} className="min-w-0">
